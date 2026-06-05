@@ -1,0 +1,15 @@
+/marketisleri
+  ├── config.php
+  ├── index.php
+  ├── viewer.php
+  ├── database.sql
+  ├── /admin
+  │     ├── login.php
+  │     ├── index.php
+  │     ├── markets.php
+  │     ├── brochures.php
+  │     ├── logout.php
+  │     └── delete.php
+  └── /uploads
+        ├── /markets (Boş klasör)
+        └── /brochures (Boş klasör)
