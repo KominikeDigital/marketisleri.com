@@ -1,62 +1,568 @@
-<?php require 'config.php'; ?>
+<?php
+require 'config.php';
+
+$today = date('Y-m-d');
+
+// Fetch all settings
+$settings_stmt = $pdo->query("SELECT * FROM settings");
+$site_settings = [];
+while ($row = $settings_stmt->fetch()) {
+    $site_settings[$row['key_name']] = $row['value_text'];
+}
+$social_settings = $site_settings; // backward compatibility
+
+
+// Filter parameters
+$selected_tab = $_GET['tab'] ?? 'active';
+$selected_cat = isset($_GET['category']) && $_GET['category'] !== '' ? intval($_GET['category']) : null;
+$selected_market = isset($_GET['market']) && $_GET['market'] !== '' ? intval($_GET['market']) : null;
+$search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
+
+// Build conditions
+$conditions = [];
+$params = [];
+
+// Tab condition
+if ($selected_tab === 'upcoming') {
+    $conditions[] = "b.start_date > ?";
+    $params[] = $today;
+} elseif ($selected_tab === 'expired') {
+    $conditions[] = "b.end_date < ?";
+    $params[] = $today;
+} else { // active
+    $conditions[] = "b.start_date <= ? AND b.end_date >= ?";
+    $params[] = $today;
+    $params[] = $today;
+}
+
+// Category condition
+if ($selected_cat !== null) {
+    $conditions[] = "m.category_id = ?";
+    $params[] = $selected_cat;
+}
+
+// Market condition
+if ($selected_market !== null) {
+    $conditions[] = "b.market_id = ?";
+    $params[] = $selected_market;
+}
+
+// Search condition
+if (!empty($search_query)) {
+    $conditions[] = "(b.title LIKE ? OR m.name LIKE ?)";
+    $params[] = '%' . $search_query . '%';
+    $params[] = '%' . $search_query . '%';
+}
+
+$sql = "SELECT b.*, m.name as market_name, m.logo as market_logo 
+        FROM brochures b 
+        JOIN markets m ON b.market_id = m.id";
+
+if (!empty($conditions)) {
+    $sql .= " WHERE " . implode(" AND ", $conditions);
+}
+
+$sql .= " ORDER BY b.start_date DESC, b.created_at DESC";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$brochures = $stmt->fetchAll();
+
+// Fetch Categories & Markets for filters
+$categories = $pdo->query("SELECT * FROM categories ORDER BY id ASC")->fetchAll();
+$markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
+
+?>
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- SEO Meta Tags -->
+    <?php
+    $seo_title = $site_settings['seo_title_home'] ?? 'marketisleri.com - Tüm Market Broşürleri Tek Yerde';
+    $seo_desc = $site_settings['seo_description_home'] ?? 'BİM, A101, ŞOK, Migros ve diğer süpermarketlerin en güncel broşürleri, aktüel ürün katalogları ve haftalık indirimleri tek bir yerde!';
+    $seo_key = $site_settings['seo_keywords_home'] ?? 'market broşürleri, aktüel ürünler, bim aktüel, a101 aktüel, şok katalog, haftalık indirimler, indirim broşürleri';
+
+    if ($selected_market) {
+        $curr_market_name = '';
+        foreach ($markets as $m) {
+            if ($m['id'] === $selected_market) {
+                $curr_market_name = $m['name'];
+                break;
+            }
+        }
+        if ($curr_market_name) {
+            $seo_title = "$curr_market_name Aktüel Ürün Katalogları ve İndirim Broşürleri | marketisleri.com";
+            $seo_desc = "$curr_market_name en güncel aktüel ürün katalogları ve broşürleri. Tüm haftalık indirimleri ve fırsatları detaylı inceleyin!";
+        }
+    } elseif ($selected_cat) {
+        $curr_cat_name = '';
+        foreach ($categories as $c) {
+            if ($c['id'] === $selected_cat) {
+                $curr_cat_name = $c['name'];
+                break;
+            }
+        }
+        if ($curr_cat_name) {
+            $seo_title = "Güncel $curr_cat_name Kampanyaları ve İndirim Katalogları | marketisleri.com";
+            $seo_desc = "En yeni $curr_cat_name indirim broşürleri, aktüel ürünler listesi ve fırsatları. Tüm market kampanyalarını karşılaştırın.";
+        }
+    } elseif (!empty($search_query)) {
+        $seo_title = '"' . htmlspecialchars($search_query) . '" İndirimleri ve Broşürleri | marketisleri.com';
+        $seo_desc = '"' . htmlspecialchars($search_query) . '" ile ilgili tüm güncel market broşürleri, aktüel ürünler ve indirim fırsatları.';
+    }
+    ?>
+    <title><?= htmlspecialchars($seo_title) ?></title>
+    <meta name="description" content="<?= htmlspecialchars($seo_desc) ?>">
+    <meta name="keywords" content="<?= htmlspecialchars($seo_key) ?>">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="<?= htmlspecialchars($site_url) ?>/uploads/logo.png">
+    
+    <!-- Typography & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
-    <title>marketisleri.com - Güncel Market Broşürleri</title>
+    
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
-        .headline { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .font-title { font-family: 'Plus Jakarta Sans', sans-serif; }
+        
+        /* Hide scrollbars for sliders */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Hero drift animations */
+        @keyframes float-orb-1 {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(8%, 12%) scale(1.12); }
+            100% { transform: translate(0, 0) scale(1); }
+        }
+        @keyframes float-orb-2 {
+            0% { transform: translate(0, 0) scale(1.1); }
+            50% { transform: translate(-8%, -12%) scale(0.92); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+        .animate-orb-1 {
+            animation: float-orb-1 16s ease-in-out infinite;
+        }
+        .animate-orb-2 {
+            animation: float-orb-2 20s ease-in-out infinite;
+        }
     </style>
 </head>
-<body class="bg-[#fff8f7] text-[#291715]">
-    <header class="fixed top-0 w-full z-50 bg-white shadow-sm h-16 flex items-center justify-between px-6 max-w-7xl mx-auto">
-        <a class="headline text-2xl font-black text-[#bd001a]" href="/">marketisleri.com</a>
-        <div class="hidden md:flex gap-6 font-bold text-gray-600">
-            <a href="#" class="text-[#bd001a] border-b-2 border-[#bd001a]">Süpermarket</a>
-            <a href="#">Yapı Market</a>
-            <a href="#">Teknoloji</a>
-        </div>
-        <button class="bg-[#bd001a] text-white px-6 py-2 rounded-full font-bold">Giriş Yap</button>
-    </header>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
 
-    <main class="pt-24 max-w-7xl mx-auto px-6">
-        <section class="text-center py-16">
-            <h1 class="headline text-5xl font-extrabold mb-6">Hangi marketin broşürünü arıyorsunuz?</h1>
-            <p class="text-xl text-gray-500 mb-10">En güncel market indirimleri ve aktüel ürünleri tek yerde.</p>
-            <div class="max-w-2xl mx-auto relative">
-                <input type="text" class="w-full p-5 pl-12 rounded-full border shadow-lg focus:ring-2 focus:ring-red-500 outline-none" placeholder="BİM, A101, Migros ara...">
-                <span class="absolute left-4 top-5 material-symbols-outlined text-gray-400">search</span>
+    <!-- Main Content Area -->
+    <main class="pt-8 max-w-7xl w-full mx-auto px-4 md:px-6 flex-1 pb-16 space-y-10">
+        
+        <!-- Hero Search Section -->
+        <section id="hero-section" class="text-center py-16 bg-gradient-to-tr from-slate-950 via-red-950 to-slate-950 rounded-3xl border border-slate-800 relative overflow-hidden px-4 shadow-xl shadow-red-950/10">
+            <!-- Video Background -->
+            <?php if (file_exists('uploads/hero.mp4')): ?>
+                <video autoplay muted loop playsinline class="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none mix-blend-lighten">
+                    <source src="uploads/hero.mp4" type="video/mp4">
+                </video>
+            <?php endif; ?>
+
+            <!-- Glowing backdrops (Drifting Ambient) -->
+            <div class="absolute top-[-40%] left-[-10%] w-[50%] h-[90%] rounded-full bg-red-500/10 blur-[100px] pointer-events-none animate-orb-1"></div>
+            <div class="absolute bottom-[-40%] right-[-10%] w-[50%] h-[90%] rounded-full bg-rose-500/10 blur-[100px] pointer-events-none animate-orb-2"></div>
+            
+            <!-- Mouse Follow Interactive Glow -->
+            <div id="hero-mouse-glow" class="absolute w-[350px] h-[350px] rounded-full bg-red-500/[0.05] blur-[90px] pointer-events-none transition-transform duration-300 ease-out hidden md:block" style="left: -999px; top: -999px; transform: translate3d(0,0,0);"></div>
+            
+            <span class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 uppercase tracking-widest mb-6 font-title">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
+                Kampanyalar & İndirimler
+            </span>
+
+            <h1 class="font-title text-4xl md:text-6xl font-black text-white mb-4 tracking-tight max-w-3xl mx-auto leading-tight">
+                Tüm Market Broşürleri <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-rose-400">Tek Yerde</span>
+            </h1>
+            
+            <p class="text-slate-400 md:text-lg mb-10 max-w-xl mx-auto font-medium">
+                BİM, A101, ŞOK ve daha fazlasının güncel aktüel katalogları ve indirimleri.
+            </p>
+            
+            <form method="GET" action="index.php" class="max-w-2xl mx-auto relative group mb-6">
+                <!-- Keep existing filters on search -->
+                <?php if ($selected_cat): ?>
+                    <input type="hidden" name="category" value="<?= $selected_cat ?>">
+                <?php endif; ?>
+                <?php if ($selected_market): ?>
+                    <input type="hidden" name="market" value="<?= $selected_market ?>">
+                <?php endif; ?>
+                <input type="hidden" name="tab" value="<?= htmlspecialchars($selected_tab) ?>">
+                
+                <input type="text" name="q" value="<?= htmlspecialchars($search_query) ?>" 
+                       class="w-full p-5 pl-14 pr-24 rounded-2xl border border-slate-800 shadow-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 outline-none text-slate-100 bg-slate-900/60 backdrop-blur-md transition-all text-base placeholder:text-slate-500" 
+                       placeholder="Hangi marketin broşürünü arıyorsunuz? (BİM, A101, ŞOK...)">
+                <span class="absolute left-5 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-500 group-focus-within:text-red-500 transition-colors">search</span>
+                
+                <button type="submit" class="absolute right-2.5 top-1/2 -translate-y-1/2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold px-6 py-3 rounded-xl transition shadow-lg shadow-red-600/20 text-sm">
+                    Ara
+                </button>
+            </form>
+            
+            <!-- Quick Searches / Popüler Aramalar -->
+            <div class="flex flex-wrap items-center justify-center gap-2.5 max-w-xl mx-auto text-xs">
+                <span class="text-slate-500 font-semibold">Popüler:</span>
+                <a href="index.php?q=BİM" class="px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-red-500 hover:bg-slate-800 transition">BİM</a>
+                <a href="index.php?q=A101" class="px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-red-500 hover:bg-slate-800 transition">A101</a>
+                <a href="index.php?q=ŞOK" class="px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-red-500 hover:bg-slate-800 transition">ŞOK</a>
+                <a href="index.php?q=Migros" class="px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-red-500 hover:bg-slate-800 transition">Migros</a>
+                <a href="index.php?q=Teknosa" class="px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-red-500 hover:bg-slate-800 transition">Teknosa</a>
             </div>
         </section>
 
-        <h2 class="headline text-3xl font-bold mb-8">Yeni Yayınlanan Broşürler</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-20">
-            <?php
-            $stmt = $pdo->query("SELECT b.*, m.name as market_name FROM brochures b JOIN markets m ON b.market_id = m.id ORDER BY created_at DESC");
-            while($row = $stmt->fetch()): ?>
-                <div class="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all group cursor-pointer" onclick="window.location='viewer.php?id=<?= $row['id'] ?>'">
-                    <div class="relative aspect-[3/4] overflow-hidden">
-                        <img src="uploads/brochures/<?= $row['cover_image'] ?>" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
-                        <div class="absolute top-4 left-4 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded uppercase">YENİ</div>
-                    </div>
-                    <div class="p-5">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="font-bold text-lg"><?= $row['market_name'] ?></span>
+        <!-- Categories Filter Slider -->
+        <section class="space-y-4">
+            <h2 class="font-title text-lg font-bold text-slate-900 flex items-center gap-2">
+                <span class="material-symbols-outlined text-red-600">category</span>
+                Kategoriler
+            </h2>
+            <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2 mask-linear">
+                <!-- All categories link -->
+                <a href="index.php?tab=<?= $selected_tab ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                   class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold border transition shrink-0 <?= $selected_cat === null ? 'bg-red-600 border-red-600 text-white shadow-md shadow-red-600/10' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300' ?>">
+                    <span class="material-symbols-outlined text-lg">grid_view</span>
+                    Tümü
+                </a>
+                
+                <?php foreach ($categories as $cat): ?>
+                    <a href="index.php?category=<?= $cat['id'] ?>&tab=<?= $selected_tab ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                       class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold border transition shrink-0 <?= $selected_cat === $cat['id'] ? 'bg-red-600 border-red-600 text-white shadow-md shadow-red-600/10' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300' ?>">
+                        <span class="material-symbols-outlined text-lg"><?= htmlspecialchars($cat['icon']) ?></span>
+                        <?= htmlspecialchars($cat['name']) ?>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <!-- Markets Circle Slider -->
+        <section class="space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="font-title text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-red-600">storefront</span>
+                    Popüler Marketler
+                </h2>
+                <?php if ($selected_market !== null): ?>
+                    <a href="index.php?tab=<?= $selected_tab ?><?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                       class="text-xs text-red-600 hover:text-red-500 font-bold">Market Filtresini Temizle</a>
+                <?php endif; ?>
+            </div>
+            
+            <div class="flex gap-4 overflow-x-auto no-scrollbar pb-3">
+                <?php foreach ($markets as $m): ?>
+                    <a href="index.php?market=<?= $m['id'] ?>&tab=<?= $selected_tab ?><?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                       class="flex flex-col items-center gap-2 shrink-0 group">
+                        <div class="w-16 h-16 rounded-full border bg-white flex items-center justify-center p-1 shadow-sm transition-all group-hover:scale-110 <?= $selected_market === $m['id'] ? 'border-2 border-red-600 shadow-md shadow-red-600/5' : 'border-slate-200' ?>">
+                            <?php if ($m['logo']): ?>
+                                <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
+                                     class="w-full h-full object-contain rounded-full" 
+                                     alt="<?= htmlspecialchars($m['name']) ?>">
+                            <?php else: ?>
+                                <div class="w-full h-full bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-bold text-xs">
+                                    <?= substr($m['name'], 0, 3) ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
-                        <p class="text-gray-500 text-sm mb-4"><?= $row['title'] ?></p>
-                        <div class="flex justify-between items-center border-t pt-4">
-                            <span class="text-red-600 font-bold text-xs">Bitiş: <?= $row['end_date'] ?></span>
-                            <a href="viewer.php?id=<?= $row['id'] ?>" class="text-[#bd001a] font-bold">İncele →</a>
-                        </div>
-                    </div>
+                        <span class="text-xs font-bold text-slate-600 group-hover:text-red-600 transition-colors <?= $selected_market === $m['id'] ? 'text-red-600' : '' ?>">
+                            <?= htmlspecialchars($m['name']) ?>
+                        </span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <!-- Tabs & Brochures Listing -->
+        <section class="space-y-6">
+            <!-- Tabs -->
+            <div class="flex border-b border-slate-200">
+                <a href="index.php?tab=active<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                   class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'active' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
+                    <span class="material-symbols-outlined text-lg">local_fire_department</span>
+                    Aktif Broşürler
+                </a>
+                <a href="index.php?tab=upcoming<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                   class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'upcoming' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
+                    <span class="material-symbols-outlined text-lg">schedule</span>
+                    Yakında Başlayacaklar
+                </a>
+                <a href="index.php?tab=expired<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                   class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'expired' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
+                    <span class="material-symbols-outlined text-lg">history</span>
+                    Süresi Dolanlar
+                </a>
+            </div>
+
+            <!-- Active Filters Info -->
+            <?php if ($selected_cat !== null || $selected_market !== null || !empty($search_query)): ?>
+                <div class="flex flex-wrap gap-2 items-center text-sm text-slate-500">
+                    <span>Aktif Filtreler:</span>
+                    <?php if ($selected_cat !== null): ?>
+                        <span class="bg-slate-200 text-slate-800 px-3 py-1 rounded-full font-bold text-xs flex items-center gap-1">
+                            Kategori: <?= htmlspecialchars($pdo->query("SELECT name FROM categories WHERE id = $selected_cat")->fetchColumn()) ?>
+                            <a href="index.php?tab=<?= $selected_tab ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" class="hover:text-red-500 material-symbols-outlined text-xs font-bold leading-none">close</a>
+                        </span>
+                    <?php endif; ?>
+                    <?php if ($selected_market !== null): ?>
+                        <span class="bg-slate-200 text-slate-800 px-3 py-1 rounded-full font-bold text-xs flex items-center gap-1">
+                            Market: <?= htmlspecialchars($pdo->query("SELECT name FROM markets WHERE id = $selected_market")->fetchColumn()) ?>
+                            <a href="index.php?tab=<?= $selected_tab ?><?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" class="hover:text-red-500 material-symbols-outlined text-xs font-bold leading-none">close</a>
+                        </span>
+                    <?php endif; ?>
+                    <?php if (!empty($search_query)): ?>
+                        <span class="bg-slate-200 text-slate-800 px-3 py-1 rounded-full font-bold text-xs flex items-center gap-1">
+                            Arama: "<?= htmlspecialchars($search_query) ?>"
+                            <a href="index.php?tab=<?= $selected_tab ?><?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?>" class="hover:text-red-500 material-symbols-outlined text-xs font-bold leading-none">close</a>
+                        </span>
+                    <?php endif; ?>
+                    <a href="index.php?tab=<?= $selected_tab ?>" class="text-xs text-red-600 hover:text-red-500 font-bold ml-1">Filtreleri Sıfırla</a>
                 </div>
-            <?php endwhile; ?>
-        </div>
+            <?php endif; ?>
+
+            <!-- Grid listing brochures -->
+            <?php if (empty($brochures)): ?>
+                <div class="py-24 text-center text-slate-400 bg-white border border-slate-100 rounded-3xl shadow-sm">
+                    <span class="material-symbols-outlined text-5xl mb-3 block text-slate-300">find_in_page</span>
+                    Bu filtreleme kriterlerine uygun aktif broşür bulunamadı.
+                </div>
+            <?php else: ?>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                    <?php foreach ($brochures as $b): ?>
+                        <div class="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 group cursor-pointer flex flex-col relative"
+                             onclick="window.location='viewer.php?id=<?= $b['id'] ?>'">
+                            
+                            <!-- Cover Image Container -->
+                            <div class="relative aspect-[3/4] bg-slate-900/5 overflow-hidden">
+                                <img src="uploads/brochures/<?= htmlspecialchars($b['cover_image']) ?>" 
+                                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                     alt="<?= htmlspecialchars($b['title']) ?>"
+                                     fetchpriority="high"
+                                     onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'100\'><rect width=\'80\' height=\'100\' fill=\'%23f1f5f9\'/><text x=\'50%%27 y=\'50%%27 dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'10\' fill=\'%2394a3b8\'>RESİM YOK</text></svg>'">
+                                
+                                <!-- Dynamic countdown badge -->
+                                <div class="absolute top-4 left-4 z-10">
+                                    <?php
+                                    if ($selected_tab === 'active') {
+                                        $diff = strtotime($b['end_date']) - strtotime($today);
+                                        $days = round($diff / (60 * 60 * 24));
+                                        
+                                        if ($days == 0) {
+                                            echo '<span class="bg-red-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-red-600/20 tracking-wider">BUGÜN SON!</span>';
+                                        } elseif ($days == 1) {
+                                            echo '<span class="bg-red-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-red-600/20 tracking-wider">YARIN BİTİYOR!</span>';
+                                        } elseif ($days <= 3) {
+                                            echo '<span class="bg-red-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-red-600/20 tracking-wider">SON ' . $days . ' GÜN!</span>';
+                                        } else {
+                                            echo '<span class="bg-emerald-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-emerald-600/10 tracking-wider">AKTİF</span>';
+                                        }
+                                    } elseif ($selected_tab === 'upcoming') {
+                                        $diff = strtotime($b['start_date']) - strtotime($today);
+                                        $days = round($diff / (60 * 60 * 24));
+                                        
+                                        if ($days == 1) {
+                                            echo '<span class="bg-amber-500 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-amber-500/20 tracking-wider">YARIN BAŞLIYOR</span>';
+                                        } else {
+                                            echo '<span class="bg-amber-500 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-amber-500/20 tracking-wider">' . $days . ' GÜN SONRA</span>';
+                                        }
+                                    } else {
+                                        echo '<span class="bg-slate-500 text-white text-[11px] font-black px-3 py-1.5 rounded-full tracking-wider">SÜRESİ GEÇTİ</span>';
+                                    }
+                                    ?>
+                                </div>
+                                
+                                <!-- File type indicator badge (PDF vs Images) -->
+                                <div class="absolute top-4 right-4 z-10">
+                                    <?php if (!empty($b['pdf_path'])): ?>
+                                        <span class="bg-slate-900/80 backdrop-blur text-white p-1.5 rounded-lg flex items-center justify-center material-symbols-outlined text-sm font-semibold" title="PDF Katalog">picture_as_pdf</span>
+                                    <?php else: ?>
+                                        <span class="bg-slate-900/80 backdrop-blur text-white p-1.5 rounded-lg flex items-center justify-center material-symbols-outlined text-sm font-semibold" title="Resim Galerisi">image</span>
+                                    <?php endif; ?>
+                                </div>
+
+                                <!-- Market logo overlay in bottom left corner -->
+                                <div class="absolute bottom-3 left-3 bg-white border border-slate-100 rounded-xl p-1.5 shadow-md flex items-center justify-center w-11 h-11">
+                                    <?php if ($b['market_logo']): ?>
+                                        <img src="uploads/markets/<?= htmlspecialchars($b['market_logo']) ?>" class="w-full h-full object-contain rounded" alt="Logo">
+                                    <?php else: ?>
+                                        <div class="text-[10px] font-bold text-slate-400">LOG</div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            
+                            <!-- Details -->
+                            <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
+                                <div>
+                                    <span class="text-xs font-bold text-red-600 tracking-wider uppercase mb-1.5 block"><?= htmlspecialchars($b['market_name']) ?></span>
+                                    <h3 class="font-title text-base font-bold text-slate-800 line-clamp-2 hover:text-red-600 transition-colors" title="<?= htmlspecialchars($b['title']) ?>">
+                                        <?= htmlspecialchars($b['title']) ?>
+                                    </h3>
+                                </div>
+                                
+                                <div class="flex justify-between items-center border-t border-slate-100 pt-4 text-xs">
+                                    <span class="text-slate-400 font-semibold flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-sm">date_range</span>
+                                        <?= date('d.m.Y', strtotime($b['start_date'])) ?> - <?= date('d.m.Y', strtotime($b['end_date'])) ?>
+                                    </span>
+                                    <span class="text-red-600 font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                                        İncele 
+                                        <span class="material-symbols-outlined text-sm">chevron_right</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </section>
+
+        <!-- E-Bülten / Newsletter Subscription Section -->
+        <section class="py-12 bg-gradient-to-tr from-slate-900 via-slate-950 to-slate-900 rounded-3xl border border-slate-800 text-center relative overflow-hidden px-6 shadow-xl mt-12">
+            <div class="absolute top-[-50%] left-[-20%] w-[60%] h-[120%] rounded-full bg-red-500/5 blur-[100px] pointer-events-none"></div>
+            
+            <span class="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center material-symbols-outlined text-2xl mx-auto mb-4 border border-red-500/20">
+                mail
+            </span>
+            
+            <h2 class="font-title text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">İndirimlerden İlk Siz Haberdar Olun</h2>
+            <p class="text-slate-400 text-sm md:text-base mb-8 max-w-lg mx-auto font-medium">
+                Yeni market broşürleri yüklendiğinde anında e-posta bildirimleri almak için bültenimize ücretsiz kayıt olun.
+            </p>
+            
+            <form id="newsletter-form" onsubmit="submitSubscription(event)" class="max-w-md mx-auto flex flex-col sm:flex-row gap-3 relative z-10">
+                <input type="email" id="subscriber-email" required
+                       class="flex-1 bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-2xl px-5 py-3.5 outline-none text-sm placeholder:text-slate-500"
+                       placeholder="E-posta adresinizi yazın...">
+                <button type="submit" 
+                        class="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-lg shadow-red-600/15 text-sm shrink-0 flex items-center justify-center gap-1.5">
+                    Abone Ol
+                    <span class="material-symbols-outlined text-sm">send</span>
+                </button>
+            </form>
+            <div id="subscription-message" class="text-xs font-semibold mt-4 hidden"></div>
+        </section>
+
     </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-100 py-10 mt-auto">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="flex flex-col items-center md:items-start gap-2">
+                <a href="index.php">
+                    <?php if (file_exists('uploads/logo.png')): ?>
+                        <img src="uploads/logo.png" alt="marketisleri.com" class="h-20 w-auto object-contain">
+                    <?php else: ?>
+                        <span class="font-title text-lg font-black text-slate-900 tracking-tight flex items-center gap-1.5">
+                            <span class="text-red-600 material-symbols-outlined font-black">receipt_long</span>
+                            marketisleri<span class="text-red-600">.com</span>
+                        </span>
+                    <?php endif; ?>
+                </a>
+                <p class="text-slate-400 text-xs">En güncel aktüel ürün katalogları tek adreste.</p>
+            </div>
+
+            <!-- Legal Links -->
+            <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-500 font-medium my-4 md:my-0">
+                <a href="gizlilik-politikasi.php" class="hover:text-red-600 transition">Gizlilik Politikası</a>
+                <a href="kullanim-kosullari.php" class="hover:text-red-600 transition">Kullanım Koşulları</a>
+                <a href="cerez-politikasi.php" class="hover:text-red-600 transition">Çerez Politikası</a>
+            </div>
+
+            <!-- Social Media Links -->
+            <?php if (!empty($social_settings['social_facebook']) || !empty($social_settings['social_instagram']) || !empty($social_settings['social_twitter']) || !empty($social_settings['social_youtube'])): ?>
+                <div class="flex gap-4 my-4 md:my-0">
+                    <?php if (!empty($social_settings['social_facebook'])): ?>
+                        <a href="<?= htmlspecialchars($social_settings['social_facebook']) ?>" target="_blank" rel="noopener" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 flex items-center justify-center transition shadow-sm border border-slate-200/50" title="Facebook">
+                            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg>
+                        </a>
+                    <?php endif; ?>
+                    <?php if (!empty($social_settings['social_instagram'])): ?>
+                        <a href="<?= htmlspecialchars($social_settings['social_instagram']) ?>" target="_blank" rel="noopener" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 flex items-center justify-center transition shadow-sm border border-slate-200/50" title="Instagram">
+                            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                        </a>
+                    <?php endif; ?>
+                    <?php if (!empty($social_settings['social_twitter'])): ?>
+                        <a href="<?= htmlspecialchars($social_settings['social_twitter']) ?>" target="_blank" rel="noopener" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 flex items-center justify-center transition shadow-sm border border-slate-200/50" title="Twitter / X">
+                            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                        </a>
+                    <?php endif; ?>
+                    <?php if (!empty($social_settings['social_youtube'])): ?>
+                        <a href="<?= htmlspecialchars($social_settings['social_youtube']) ?>" target="_blank" rel="noopener" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 flex items-center justify-center transition shadow-sm border border-slate-200/50" title="YouTube">
+                            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.11C19.518 3.545 12 3.545 12 3.545s-7.518 0-9.388.507a3.003 3.003 0 0 0-2.11 2.11C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.11c1.87.507 9.388.507 9.388.507s7.518 0 9.388-.507a3.003 3.003 0 0 0 2.11-2.11C24 15.967 24 12 24 12s0-3.967-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            
+            <div class="text-slate-400 text-xs text-center md:text-right space-y-1">
+                <p>&copy; 2026 marketisleri.com All rights reserved.</p>
+                <p><a href="https://kominikee.com" target="_blank" rel="noopener" class="text-red-600 hover:text-red-500 font-semibold">Kominike "Creative" Digital Project</a></p>
+            </div>
+        </div>
+    </footer>
+    <script>
+        async function submitSubscription(e) {
+            e.preventDefault();
+            const emailInput = document.getElementById('subscriber-email');
+            const msgDiv = document.getElementById('subscription-message');
+            const email = emailInput.value;
+
+            msgDiv.className = "text-xs font-semibold mt-4 text-slate-400";
+            msgDiv.innerText = "Kaydediliyor...";
+            msgDiv.classList.remove('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('email', email);
+
+                const response = await fetch('subscribe.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    msgDiv.className = "text-xs font-semibold mt-4 text-emerald-400";
+                    msgDiv.innerText = data.message;
+                    emailInput.value = '';
+                } else {
+                    msgDiv.className = "text-xs font-semibold mt-4 text-red-400";
+                    msgDiv.innerText = data.message;
+                }
+            } catch (error) {
+                msgDiv.className = "text-xs font-semibold mt-4 text-red-400";
+                msgDiv.innerText = "Bir hata oluştu. Lütfen bağlantınızı kontrol edip tekrar deneyin.";
+            }
+        }
+
+        // Interactive mouse glow follow
+        const heroSection = document.getElementById('hero-section');
+        const mouseGlow = document.getElementById('hero-mouse-glow');
+
+        if (heroSection && mouseGlow) {
+            heroSection.addEventListener('mousemove', (e) => {
+                const rect = heroSection.getBoundingClientRect();
+                const x = e.clientX - rect.left - 175; // Subtract radius (350/2)
+                const y = e.clientY - rect.top - 175;  // Subtract radius (350/2)
+                
+                mouseGlow.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+                if (mouseGlow.style.left === '-999px') {
+                    mouseGlow.style.left = '0px';
+                    mouseGlow.style.top = '0px';
+                }
+            });
+            heroSection.addEventListener('mouseleave', () => {
+                mouseGlow.style.left = '-999px';
+                mouseGlow.style.top = '-999px';
+            });
+        }
+    </script>
 </body>
 </html>

@@ -1,0 +1,14 @@
+{
+  "name": "marketisleri-scraper",
+  "version": "1.0.0",
+  "description": "Otomatik market broşürü kazıma modülü",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
+    "mysql2": "^3.9.1",
+    "sqlite3": "^5.1.7"
+  }
+}

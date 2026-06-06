@@ -1,51 +1,406 @@
-<?php require '../config.php'; if(!isset($_SESSION['admin'])) header("Location: login.php");
-if(isset($_POST['add'])){
-    $stmt = $pdo->prepare("INSERT INTO markets (name, slug, logo, description, category_id) VALUES (?,?,?,?,?)");
-    $stmt->execute([$_POST['name'], $_POST['slug'], $_POST['logo'], $_POST['description'], $_POST['category_id']]);
-    header("Location: markets.php");
+<?php
+require '../config.php';
+
+// Authentication Check
+if (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true) {
+    header("Location: login.php");
+    exit;
 }
+
+$error = null;
+$success = null;
+
+// Handle Add/Edit Market
+if (isset($_POST['save'])) {
+    $id = isset($_POST['id']) && $_POST['id'] !== '' ? intval($_POST['id']) : null;
+    $name = trim($_POST['name'] ?? '');
+    $slug = trim($_POST['slug'] ?? '');
+    $description = trim($_POST['description'] ?? '');
+    $category_id = intval($_POST['category_id'] ?? 0);
+    
+    // Auto-generate slug if empty
+    if (empty($slug)) {
+        $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $name)));
+    }
+
+    if (empty($name) || $category_id === 0) {
+        $error = "Lütfen gerekli alanları (Ad, Kategori) doldurun.";
+    } else {
+        // Logo Upload Handling
+        $logo_name = $_POST['existing_logo'] ?? '';
+        if (isset($_FILES['logo']) && $_FILES['logo']['error'] === UPLOAD_ERR_OK) {
+            $file_tmp = $_FILES['logo']['tmp_name'];
+            $file_name = $_FILES['logo']['name'];
+            $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+            
+            $allowed_exts = ['png', 'jpg', 'jpeg', 'svg', 'webp'];
+            if (in_array($file_ext, $allowed_exts)) {
+                // Delete old logo if replacing
+                if (!empty($logo_name) && file_exists('../uploads/markets/' . $logo_name)) {
+                    @unlink('../uploads/markets/' . $logo_name);
+                }
+                
+                // Set clean unique logo name
+                $logo_name = $slug . '-' . time() . '.' . $file_ext;
+                $dest_path = '../uploads/markets/' . $logo_name;
+                
+                if (!move_uploaded_file($file_tmp, $dest_path)) {
+                    $error = "Logo yüklenirken bir hata oluştu.";
+                }
+            } else {
+                $error = "Geçersiz logo formatı. Sadece PNG, JPG, JPEG, SVG ve WEBP kabul edilir.";
+            }
+        }
+
+        if (!$error) {
+            if ($id === null) {
+                // Check if slug is unique
+                $check_stmt = $pdo->prepare("SELECT COUNT(*) FROM markets WHERE slug = ?");
+                $check_stmt->execute([$slug]);
+                if ($check_stmt->fetchColumn() > 0) {
+                    $slug = $slug . '-' . rand(100, 999);
+                }
+                
+                // Add new market
+                try {
+                    $stmt = $pdo->prepare("INSERT INTO markets (name, slug, logo, description, category_id) VALUES (?, ?, ?, ?, ?)");
+                    $stmt->execute([$name, $slug, $logo_name, $description, $category_id]);
+                    $success = "Market başarıyla eklendi.";
+                } catch (PDOException $e) {
+                    $error = "Kaydetme hatası: " . $e->getMessage();
+                }
+            } else {
+                // Check if slug is unique for other markets
+                $check_stmt = $pdo->prepare("SELECT COUNT(*) FROM markets WHERE slug = ? AND id != ?");
+                $check_stmt->execute([$slug, $id]);
+                if ($check_stmt->fetchColumn() > 0) {
+                    $slug = $slug . '-' . rand(100, 999);
+                }
+                
+                // Edit existing market
+                try {
+                    $stmt = $pdo->prepare("UPDATE markets SET name = ?, slug = ?, logo = ?, description = ?, category_id = ? WHERE id = ?");
+                    $stmt->execute([$name, $slug, $logo_name, $description, $category_id, $id]);
+                    $success = "Market başarıyla güncellendi.";
+                } catch (PDOException $e) {
+                    $error = "Güncelleme hatası: " . $e->getMessage();
+                }
+            }
+        }
+    }
+}
+
+// Fetch Categories for selection
+$categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
+
+// Fetch Markets list with category names
+$markets_stmt = $pdo->query("SELECT m.*, c.name as category_name FROM markets m LEFT JOIN categories c ON m.category_id = c.id ORDER BY m.name ASC");
+$markets = $markets_stmt->fetchAll();
+
 ?>
 <!DOCTYPE html>
-<html lang="tr"><head><script src="https://cdn.tailwindcss.com"></script><title>Marketler</title></head>
-<body class="bg-gray-50 flex">
-    <div class="w-64 bg-gray-900 h-screen text-white p-6 fixed">
-        <nav class="space-y-4">
-            <a href="index.php" class="block p-2 hover:bg-gray-800 rounded">Dashboard</a>
-            <a href="markets.php" class="block p-2 bg-gray-800 rounded">Marketler</a>
-            <a href="brochures.php" class="block p-2 hover:bg-gray-800 rounded">Broşürler</a>
-            <a href="logout.php" class="block p-2 text-red-400">Çıkış</a>
-        </nav>
-    </div>
-    <main class="ml-64 p-10 w-full">
-        <div class="flex justify-between mb-6">
-            <h2 class="text-3xl font-bold">Market Yönetimi</h2>
-            <button onclick="document.getElementById('modal').classList.remove('hidden')" class="bg-red-600 text-white px-4 py-2 rounded-lg font-bold">+ Market Ekle</button>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Yönetimi - marketisleri.com</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+    <style>
+        body { font-family: 'Hanken Grotesk', sans-serif; }
+        .font-title { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex min-h-screen">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
+        <div class="p-6 border-b border-slate-800">
+            <a href="index.php" class="font-title text-xl font-black text-white flex items-center gap-2">
+                <?php if (file_exists('../uploads/logo.png')): ?>
+                    <img src="../uploads/logo.png" alt="marketisleri.com" class="h-8 w-auto object-contain">
+                <?php else: ?>
+                    <span class="text-red-500 material-symbols-outlined">dashboard</span>
+                    marketisleri<span class="text-red-500">.panel</span>
+                <?php endif; ?>
+            </a>
         </div>
-        <div class="bg-white rounded-xl shadow overflow-hidden">
-            <table class="w-full text-left">
-                <thead class="bg-gray-100"><tr><th class="p-4">Market</th><th class="p-4">Slug</th><th class="p-4">İşlem</th></tr></thead>
-                <tbody>
-                    <?php $stmt = $pdo->query("SELECT * FROM markets"); while($row = $stmt->fetch()): ?>
-                    <tr class="border-t"><td class="p-4"><?= $row['name'] ?></td><td class="p-4"><?= $row['slug'] ?></td><td class="p-4"><a href="delete.php?type=market&id=<?= $row['id'] ?>" class="text-red-500">Sil</a></td></tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
+        <nav class="flex-1 p-4 space-y-2">
+            <a href="index.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">space_dashboard</span>
+                Dashboard
+            </a>
+            <a href="markets.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold transition-all">
+                <span class="material-symbols-outlined text-lg">storefront</span>
+                Marketler
+            </a>
+            <a href="brochures.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">menu_book</span>
+                Broşürler
+            </a>
+            <a href="subscribers.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">mail</span>
+                Aboneler
+            </a>
+            <a href="settings.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">settings</span>
+                Ayarlar
+            </a>
+        </nav>
+        <div class="p-4 border-t border-slate-800">
+            <a href="logout.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-all font-semibold">
+                <span class="material-symbols-outlined text-lg">logout</span>
+                Oturumu Kapat
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-y-auto">
+        <!-- Header -->
+        <header class="h-20 bg-slate-900/40 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-8 shrink-0">
+            <h1 class="font-title text-2xl font-bold text-white font-bold">Market Yönetimi</h1>
+            <div class="flex items-center gap-4">
+                <button onclick="openModal()" class="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl font-bold transition shadow-lg shadow-red-600/10">
+                    <span class="material-symbols-outlined text-lg">add_circle</span>
+                    Yeni Market Ekle
+                </button>
+            </div>
+        </header>
+
+        <!-- Container -->
+        <div class="p-8 space-y-8 max-w-7xl w-full mx-auto">
+            <!-- Messages -->
+            <?php if ($success): ?>
+                <div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm p-4 rounded-2xl flex items-center gap-3">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                    <span><?= htmlspecialchars($success) ?></span>
+                </div>
+            <?php endif; ?>
+            <?php if ($error): ?>
+                <div class="bg-red-500/10 border border-red-500/30 text-red-200 text-sm p-4 rounded-2xl flex items-center gap-3">
+                    <span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
+                    <span><?= htmlspecialchars($error) ?></span>
+                </div>
+            <?php endif; ?>
+
+            <!-- Markets Grid/Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+                <div class="p-6 border-b border-slate-800">
+                    <h3 class="font-title text-xl font-bold text-white">Marketler Listesi</h3>
+                </div>
+
+                <?php if (empty($markets)): ?>
+                    <div class="py-20 text-center text-slate-500">
+                        <span class="material-symbols-outlined text-5xl mb-3 block text-slate-600">storefront</span>
+                        Henüz market eklenmemiş. Sağ üst köşeden ilk marketinizi ekleyin!
+                    </div>
+                <?php else: ?>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase tracking-wider bg-slate-950/40">
+                                    <th class="p-4 pl-6">Logo</th>
+                                    <th class="p-4">Market Adı</th>
+                                    <th class="p-4">Slug</th>
+                                    <th class="p-4">Kategori</th>
+                                    <th class="p-4">Açıklama</th>
+                                    <th class="p-4 pr-6 text-right">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 text-sm">
+                                <?php foreach ($markets as $m): ?>
+                                    <tr class="hover:bg-slate-800/20 transition-all">
+                                        <td class="p-4 pl-6">
+                                            <?php if ($m['logo']): ?>
+                                                <img src="../uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
+                                                     class="w-12 h-12 object-contain bg-white rounded-xl p-1 border border-slate-800 shadow" 
+                                                     alt="Logo">
+                                            <?php else: ?>
+                                                <div class="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 border border-slate-700">
+                                                    <span class="material-symbols-outlined">image</span>
+                                                </div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="p-4 font-bold text-white text-base"><?= htmlspecialchars($m['name']) ?></td>
+                                        <td class="p-4 text-slate-400 font-mono"><?= htmlspecialchars($m['slug']) ?></td>
+                                        <td class="p-4">
+                                            <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                                                <?= htmlspecialchars($m['category_name'] ?? 'Kategorisiz') ?>
+                                            </span>
+                                        </td>
+                                        <td class="p-4 text-slate-400 max-w-xs truncate" title="<?= htmlspecialchars($m['description'] ?? '') ?>">
+                                            <?= htmlspecialchars($m['description'] ?? '-') ?>
+                                        </td>
+                                        <td class="p-4 pr-6 text-right space-x-2">
+                                            <button onclick="editMarket(<?= htmlspecialchars(json_encode($m)) ?>)" 
+                                                    class="inline-flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">
+                                                <span class="material-symbols-outlined text-xs">edit</span>
+                                                Düzenle
+                                            </button>
+                                            <a href="delete.php?type=market&id=<?= $m['id'] ?>" 
+                                               onclick="return confirm('Bu marketi sildiğinizde, bu markete ait tüm broşürler de silinecektir. Emin misiniz?')"
+                                               class="inline-flex items-center gap-1 bg-red-950/40 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-red-900/30 transition">
+                                                <span class="material-symbols-outlined text-xs">delete</span>
+                                                Sil
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
     </main>
-    <div id="modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center">
-        <form method="POST" class="bg-white p-8 rounded-2xl w-96">
-            <h3 class="text-xl font-bold mb-4">Yeni Market</h3>
-            <input type="text" name="name" placeholder="Market Adı" class="w-full p-2 border rounded mb-3" required>
-            <input type="text" name="slug" placeholder="market-url-adi" class="w-full p-2 border rounded mb-3" required>
-            <input type="text" name="logo" placeholder="Logo Dosya Adı (Örn: bim.png)" class="w-full p-2 border rounded mb-3">
-            <textarea name="description" placeholder="Açıklama" class="w-full p-2 border rounded mb-3"></textarea>
-            <select name="category_id" class="w-full p-2 border rounded mb-4">
-                <?php $cats = $pdo->query("SELECT * FROM categories"); while($c = $cats->fetch()) echo "<option value='{$c['id']}'>{$c['name']}</option>"; ?>
-            </select>
-            <div class="flex justify-end gap-2">
-                <button type="button" onclick="document.getElementById('modal').classList.add('hidden')" class="px-4 py-2">İptal</button>
-                <button name="add" class="bg-red-600 text-white px-4 py-2 rounded-lg">Kaydet</button>
+
+    <!-- Modal Form -->
+    <div id="modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-250">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950/40">
+                <h3 id="modal-title" class="font-title text-xl font-bold text-white">Yeni Market Ekle</h3>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">
+                    <span class="material-symbols-outlined text-lg">close</span>
+                </button>
             </div>
-        </form>
+            
+            <form method="POST" enctype="multipart/form-data" class="p-6 space-y-5">
+                <input type="hidden" id="form-id" name="id">
+                <input type="hidden" id="form-existing-logo" name="existing_logo">
+                
+                <div>
+                    <label for="form-name" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Market Adı *</label>
+                    <input type="text" id="form-name" name="name" required
+                           class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
+                           placeholder="BİM, A101, Şok vb.">
+                </div>
+
+                <div>
+                    <label for="form-slug" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Slug (URL Adı)</label>
+                    <input type="text" id="form-slug" name="slug"
+                           class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
+                           placeholder="bim (Boş bırakılırsa otomatik üretilir)">
+                </div>
+
+                <div>
+                    <label for="form-category" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Kategori *</label>
+                    <select id="form-category" name="category_id" required
+                            class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition">
+                        <option value="">Kategori Seçin</option>
+                        <?php foreach ($categories as $cat): ?>
+                            <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Market Logosu</label>
+                    <div class="flex items-center gap-4">
+                        <div id="logo-preview-container" class="w-16 h-16 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                            <span id="logo-preview-placeholder" class="material-symbols-outlined text-slate-600">image</span>
+                            <img id="logo-preview-img" class="w-full h-full object-contain hidden bg-white p-1">
+                        </div>
+                        <div class="flex-1">
+                            <input type="file" id="form-logo" name="logo" accept="image/*" class="hidden" onchange="previewLogo(this)">
+                            <button type="button" onclick="document.getElementById('form-logo').click()" 
+                                    class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl text-sm font-semibold transition">
+                                Dosya Seç
+                            </button>
+                            <p class="text-xs text-slate-500 mt-2">Önerilen: 300x300 kare PNG / WEBP</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="form-description" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Açıklama</label>
+                    <textarea id="form-description" name="description" rows="3"
+                              class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
+                              placeholder="Market hakkında kısa tanıtım metni..."></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                    <button type="button" onclick="closeModal()" 
+                            class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold px-5 py-2.5 rounded-xl transition">
+                        İptal
+                    </button>
+                    <button type="submit" name="save" 
+                            class="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2.5 rounded-xl transition shadow-lg shadow-red-600/10">
+                        Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-</body></html>
+
+    <!-- JS Helper for Modals -->
+    <script>
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modal-title');
+        const formId = document.getElementById('form-id');
+        const formName = document.getElementById('form-name');
+        const formSlug = document.getElementById('form-slug');
+        const formCategory = document.getElementById('form-category');
+        const formDescription = document.getElementById('form-description');
+        const formExistingLogo = document.getElementById('form-existing-logo');
+        
+        const logoPreviewPlaceholder = document.getElementById('logo-preview-placeholder');
+        const logoPreviewImg = document.getElementById('logo-preview-img');
+
+        function openModal() {
+            modalTitle.innerText = "Yeni Market Ekle";
+            formId.value = "";
+            formName.value = "";
+            formSlug.value = "";
+            formCategory.value = "";
+            formDescription.value = "";
+            formExistingLogo.value = "";
+            
+            logoPreviewImg.src = "";
+            logoPreviewImg.classList.add('hidden');
+            logoPreviewPlaceholder.classList.remove('hidden');
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+        }
+
+        function editMarket(market) {
+            modalTitle.innerText = "Marketi Düzenle";
+            formId.value = market.id;
+            formName.value = market.name;
+            formSlug.value = market.slug;
+            formCategory.value = market.category_id;
+            formDescription.value = market.description || "";
+            formExistingLogo.value = market.logo || "";
+            
+            if (market.logo) {
+                logoPreviewImg.src = "../uploads/markets/" + market.logo;
+                logoPreviewImg.classList.remove('hidden');
+                logoPreviewPlaceholder.classList.add('hidden');
+            } else {
+                logoPreviewImg.src = "";
+                logoPreviewImg.classList.add('hidden');
+                logoPreviewPlaceholder.classList.remove('hidden');
+            }
+            
+            modal.classList.remove('hidden');
+        }
+
+        function previewLogo(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    logoPreviewImg.src = e.target.result;
+                    logoPreviewImg.classList.remove('hidden');
+                    logoPreviewPlaceholder.classList.add('hidden');
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+    </script>
+</body>
+</html>
