@@ -18,6 +18,15 @@ if (isset($_POST['save'])) {
     $description = trim($_POST['description'] ?? '');
     $category_id = intval($_POST['category_id'] ?? 0);
     
+    // Scraper settings
+    $scraper_url = trim($_POST['scraper_url'] ?? '');
+    $scraper_container = trim($_POST['scraper_container'] ?? '');
+    $scraper_title = trim($_POST['scraper_title'] ?? '');
+    $scraper_cover = trim($_POST['scraper_cover'] ?? '');
+    $scraper_detail_link = trim($_POST['scraper_detail_link'] ?? '');
+    $scraper_page_image = trim($_POST['scraper_page_image'] ?? '');
+    $scraper_active = isset($_POST['scraper_active']) ? 1 : 0;
+    
     // Auto-generate slug if empty
     if (empty($slug)) {
         $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $name)));
@@ -63,8 +72,8 @@ if (isset($_POST['save'])) {
                 
                 // Add new market
                 try {
-                    $stmt = $pdo->prepare("INSERT INTO markets (name, slug, logo, description, category_id) VALUES (?, ?, ?, ?, ?)");
-                    $stmt->execute([$name, $slug, $logo_name, $description, $category_id]);
+                    $stmt = $pdo->prepare("INSERT INTO markets (name, slug, logo, description, category_id, scraper_url, scraper_container, scraper_title, scraper_cover, scraper_detail_link, scraper_page_image, scraper_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->execute([$name, $slug, $logo_name, $description, $category_id, $scraper_url, $scraper_container, $scraper_title, $scraper_cover, $scraper_detail_link, $scraper_page_image, $scraper_active]);
                     $success = "Market başarıyla eklendi.";
                 } catch (PDOException $e) {
                     $error = "Kaydetme hatası: " . $e->getMessage();
@@ -79,8 +88,8 @@ if (isset($_POST['save'])) {
                 
                 // Edit existing market
                 try {
-                    $stmt = $pdo->prepare("UPDATE markets SET name = ?, slug = ?, logo = ?, description = ?, category_id = ? WHERE id = ?");
-                    $stmt->execute([$name, $slug, $logo_name, $description, $category_id, $id]);
+                    $stmt = $pdo->prepare("UPDATE markets SET name = ?, slug = ?, logo = ?, description = ?, category_id = ?, scraper_url = ?, scraper_container = ?, scraper_title = ?, scraper_cover = ?, scraper_detail_link = ?, scraper_page_image = ?, scraper_active = ? WHERE id = ?");
+                    $stmt->execute([$name, $slug, $logo_name, $description, $category_id, $scraper_url, $scraper_container, $scraper_title, $scraper_cover, $scraper_detail_link, $scraper_page_image, $scraper_active, $id]);
                     $success = "Market başarıyla güncellendi.";
                 } catch (PDOException $e) {
                     $error = "Güncelleme hatası: " . $e->getMessage();
@@ -315,9 +324,63 @@ $markets = $markets_stmt->fetchAll();
 
                 <div>
                     <label for="form-description" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Açıklama</label>
-                    <textarea id="form-description" name="description" rows="3"
+                    <textarea id="form-description" name="description" rows="2"
                               class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
                               placeholder="Market hakkında kısa tanıtım metni..."></textarea>
+                </div>
+
+                <div class="border-t border-slate-800 pt-4 space-y-4">
+                    <h4 class="font-title text-sm font-bold text-slate-300">Otomatik Kazıma (Scraper) Ayarları</h4>
+                    
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="form-scraper-active" name="scraper_active" value="1"
+                               class="w-4 h-4 rounded bg-slate-950 border border-slate-800 text-red-600 focus:ring-red-500 focus:ring-offset-slate-900">
+                        <label for="form-scraper-active" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Otomatik Kazıma Aktif</label>
+                    </div>
+
+                    <div>
+                        <label for="form-scraper-url" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Hedef Kazıma URL'si</label>
+                        <input type="url" id="form-scraper-url" name="scraper_url"
+                               class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
+                               placeholder="https://example.com/aktuel-urunler">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="form-scraper-container" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Kart (Container) Seçici</label>
+                            <input type="text" id="form-scraper-container" name="scraper_container"
+                                   class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
+                                   placeholder=".brochure-card">
+                        </div>
+                        <div>
+                            <label for="form-scraper-title" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Başlık Seçici</label>
+                            <input type="text" id="form-scraper-title" name="scraper_title"
+                                   class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
+                                   placeholder="h3.title">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="form-scraper-cover" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Kapak Resmi Seçici</label>
+                            <input type="text" id="form-scraper-cover" name="scraper_cover"
+                                   class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
+                                   placeholder="img.cover">
+                        </div>
+                        <div>
+                            <label for="form-scraper-detail-link" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Detay Link Seçici</label>
+                            <input type="text" id="form-scraper-detail-link" name="scraper_detail_link"
+                                   class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
+                                   placeholder="a.detail-btn">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="form-scraper-page-image" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Detay Sayfası Sayfa Resimleri Seçici</label>
+                        <input type="text" id="form-scraper-page-image" name="scraper_page_image"
+                               class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
+                               placeholder=".brochure-pages img">
+                    </div>
                 </div>
 
                 <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
@@ -345,6 +408,15 @@ $markets = $markets_stmt->fetchAll();
         const formDescription = document.getElementById('form-description');
         const formExistingLogo = document.getElementById('form-existing-logo');
         
+        // Scraper settings elements
+        const formScraperActive = document.getElementById('form-scraper-active');
+        const formScraperUrl = document.getElementById('form-scraper-url');
+        const formScraperContainer = document.getElementById('form-scraper-container');
+        const formScraperTitle = document.getElementById('form-scraper-title');
+        const formScraperCover = document.getElementById('form-scraper-cover');
+        const formScraperDetailLink = document.getElementById('form-scraper-detail-link');
+        const formScraperPageImage = document.getElementById('form-scraper-page-image');
+        
         const logoPreviewPlaceholder = document.getElementById('logo-preview-placeholder');
         const logoPreviewImg = document.getElementById('logo-preview-img');
 
@@ -356,6 +428,15 @@ $markets = $markets_stmt->fetchAll();
             formCategory.value = "";
             formDescription.value = "";
             formExistingLogo.value = "";
+            
+            // Clear scraper settings
+            formScraperActive.checked = false;
+            formScraperUrl.value = "";
+            formScraperContainer.value = "";
+            formScraperTitle.value = "";
+            formScraperCover.value = "";
+            formScraperDetailLink.value = "";
+            formScraperPageImage.value = "";
             
             logoPreviewImg.src = "";
             logoPreviewImg.classList.add('hidden');
@@ -376,6 +457,15 @@ $markets = $markets_stmt->fetchAll();
             formCategory.value = market.category_id;
             formDescription.value = market.description || "";
             formExistingLogo.value = market.logo || "";
+            
+            // Set scraper settings
+            formScraperActive.checked = market.scraper_active == 1;
+            formScraperUrl.value = market.scraper_url || "";
+            formScraperContainer.value = market.scraper_container || "";
+            formScraperTitle.value = market.scraper_title || "";
+            formScraperCover.value = market.scraper_cover || "";
+            formScraperDetailLink.value = market.scraper_detail_link || "";
+            formScraperPageImage.value = market.scraper_page_image || "";
             
             if (market.logo) {
                 logoPreviewImg.src = "../uploads/markets/" + market.logo;

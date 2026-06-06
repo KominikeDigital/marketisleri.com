@@ -269,6 +269,23 @@ try {
     // Fail silently
 }
 
+// Database Migrations for Scraper settings in markets table
+try {
+    $pdo->query("SELECT scraper_url FROM markets LIMIT 1");
+} catch (PDOException $e) {
+    try {
+        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_url TEXT DEFAULT NULL");
+        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_container VARCHAR(255) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_title VARCHAR(255) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_cover VARCHAR(255) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_detail_link VARCHAR(255) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_page_image VARCHAR(255) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_active INT DEFAULT 0");
+    } catch (PDOException $ex) {
+        // Fail silently
+    }
+}
+
 // Auto cleanup function: removes brochures expired for more than 30 days along with their files
 function cleanup_expired_brochures($pdo) {
     $one_month_ago = date('Y-m-d', strtotime('-30 days'));

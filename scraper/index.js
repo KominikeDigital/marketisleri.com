@@ -1,6 +1,7 @@
 const bim = require('./bim');
 const a101 = require('./a101');
 const sok = require('./sok');
+const generic = require('./generic');
 
 async function main() {
     console.log('====================================================');
@@ -19,6 +20,10 @@ async function main() {
         // Run ŞOK Scraper
         console.log('\n--- ŞOK SCRAPER ---');
         await sok.scrapeSok();
+        
+        // Run Dynamic Generic Scraper
+        console.log('\n--- DİNAMİK GENEL SCRAPER ---');
+        await generic.scrapeGenericActiveMarkets();
         
         console.log('\n✅ [Scraper] Tüm market tarama görevleri tamamlandı.');
         process.exit(0);
