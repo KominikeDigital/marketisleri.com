@@ -34,7 +34,7 @@ function fetchPage(url, depth = 0) {
 
 async function run() {
     try {
-        const html = await fetchPage('https://www.sokmarket.com.tr/kampanyalar');
+        const html = await fetchPage('https://www.sokmarket.com.tr/kampanyalar/4');
         console.log('Fetched ŞOK Kampanyalar Page. Length:', html.length);
         fs.writeFileSync(path.join(__dirname, 'sok_kampanyalar.html'), html);
         
