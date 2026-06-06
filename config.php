@@ -8,7 +8,7 @@ $admin_pass = "161224";
 
 date_default_timezone_set('Europe/Istanbul');
 
-// cPanel / public_html defaults. Leave these placeholders as-is to use the bundled SQLite database.
+// cPanel / public_html/marketisleri.com defaults. Leave these placeholders as-is to use the bundled SQLite database.
 // For cPanel MySQL, either edit these variables or create config.local.php from config.local.example.php.
 $db_driver = 'auto'; // auto, sqlite, mysql
 $db_host = 'localhost';
