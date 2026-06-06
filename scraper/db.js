@@ -1,31 +1,74 @@
 const fs = require('fs');
 const path = require('path');
 
-// Parse config.php config variables
+// Parse PHP config variables/constants without executing PHP.
 const configPath = path.join(__dirname, '../config.php');
+const localConfigPath = path.join(__dirname, '../config.local.php');
 let isLocal = true;
+let db_driver = 'auto';
 let db_host = 'localhost';
-let db_name = '';
-let db_user = '';
-let db_pass = '';
+let db_name = 'VERITABANI_ADINIZ';
+let db_user = 'VERITABANI_KULLANICINIZ';
+let db_pass = 'VERITABANI_SIFRENIZ';
+let db_path = path.join(__dirname, '../database.db');
+
+function readPhpValue(content, variableName, constantName, fallback) {
+    const variableMatch = content.match(new RegExp(`\\$${variableName}\\s*=\\s*['"]([^'"]*)['"]`));
+    const constantMatch = content.match(new RegExp(`define\\(\\s*['"]${constantName}['"]\\s*,\\s*['"]([^'"]*)['"]\\s*\\)`));
+
+    if (constantMatch) {
+        return constantMatch[1];
+    }
+
+    if (variableMatch) {
+        return variableMatch[1];
+    }
+
+    return fallback;
+}
+
+function applyPhpConfig(filePath) {
+    if (!fs.existsSync(filePath)) {
+        return;
+    }
+
+    const configContent = fs.readFileSync(filePath, 'utf8');
+
+    db_driver = readPhpValue(configContent, 'db_driver', 'DB_DRIVER', db_driver).toLowerCase();
+    db_host = readPhpValue(configContent, 'db_host', 'DB_HOST', db_host);
+    db_name = readPhpValue(configContent, 'db_name', 'DB_NAME', db_name);
+    db_user = readPhpValue(configContent, 'db_user', 'DB_USER', db_user);
+    db_pass = readPhpValue(configContent, 'db_pass', 'DB_PASS', db_pass);
+    db_path = readPhpValue(configContent, 'db_path', 'DB_PATH', db_path);
+}
+
+function hasMysqlConfig() {
+    return db_name &&
+        db_user &&
+        db_name !== 'VERITABANI_ADINIZ' &&
+        db_user !== 'VERITABANI_KULLANICINIZ' &&
+        db_pass !== 'VERITABANI_SIFRENIZ';
+}
 
 try {
-    const configContent = fs.readFileSync(configPath, 'utf8');
-    
-    db_host = configContent.match(/\$db_host\s*=\s*['"](.*?)['"]/)?.[1] || 'localhost';
-    db_name = configContent.match(/\$db_name\s*=\s*['"](.*?)['"]/)?.[1] || '';
-    db_user = configContent.match(/\$db_user\s*=\s*['"](.*?)['"]/)?.[1] || '';
-    db_pass = configContent.match(/\$db_pass\s*=\s*['"](.*?)['"]/)?.[1] || '';
+    applyPhpConfig(configPath);
+    applyPhpConfig(localConfigPath);
 
-    // Check environment detection logic
-    if (db_name === 'VERITABANI_ADINIZ' || __dirname.includes('emrecevik') || __dirname.includes('Documents/GitHub')) {
+    db_driver = (process.env.DB_DRIVER || db_driver).toLowerCase();
+    db_host = process.env.DB_HOST || db_host;
+    db_name = process.env.DB_NAME || db_name;
+    db_user = process.env.DB_USER || db_user;
+    db_pass = process.env.DB_PASS || db_pass;
+    db_path = process.env.DB_PATH || db_path;
+
+    if (db_driver === 'sqlite') {
         isLocal = true;
-    } else if (configContent.includes('$is_local = false')) {
+    } else if (db_driver === 'mysql') {
         isLocal = false;
-    } else if (configContent.includes('$is_local = true')) {
+    } else if (!hasMysqlConfig() || __dirname.includes('emrecevik') || __dirname.includes('Documents/GitHub')) {
         isLocal = true;
     } else {
-        isLocal = __dirname.includes('localhost') || __dirname.includes('127.0.0.1');
+        isLocal = false;
     }
 } catch (e) {
     console.error('⚠️ config.php dosyası okunamadı, varsayılan SQLite moduna geçiliyor:', e.message);
@@ -38,9 +81,9 @@ if (isLocal) {
     dbType = 'sqlite';
     try {
         const sqlite3 = require('sqlite3').verbose();
-        const dbFile = path.join(__dirname, '../database.db');
+        const dbFile = path.isAbsolute(db_path) ? db_path : path.join(__dirname, '..', db_path);
         sqliteConnection = new sqlite3.Database(dbFile);
-        console.log('✓ Scraper Veritabanı: Yerel SQLite modu aktif.');
+        console.log(`✓ Scraper Veritabanı: SQLite modu aktif (${dbFile}).`);
     } catch (e) {
         console.warn('⚠️ Yerel SQLite başlatılamadı (sqlite3 yüklü olmayabilir):', e.message);
     }
