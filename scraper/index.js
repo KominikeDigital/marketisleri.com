@@ -1,4 +1,6 @@
 const bim = require('./bim');
+const a101 = require('./a101');
+const sok = require('./sok');
 
 async function main() {
     console.log('====================================================');
@@ -7,18 +9,24 @@ async function main() {
     
     try {
         // Run BİM Scraper
+        console.log('\n--- BİM SCRAPER ---');
         await bim.scrapeBim();
         
-        // In the future, you can add other scrapers here:
-        // await a101.scrapeA101();
-        // await sok.scrapeSok();
+        // Run A101 Scraper
+        console.log('\n--- A101 SCRAPER ---');
+        await a101.scrapeA101();
         
-        console.log('✅ [Scraper] Tüm market tarama görevleri tamamlandı.');
+        // Run ŞOK Scraper
+        console.log('\n--- ŞOK SCRAPER ---');
+        await sok.scrapeSok();
+        
+        console.log('\n✅ [Scraper] Tüm market tarama görevleri tamamlandı.');
         process.exit(0);
     } catch (e) {
-        console.error('❌ [Scraper] Beklenmeyen bir hata oluştu:', e.message);
+        console.error('\n❌ [Scraper] Beklenmeyen bir hata oluştu:', e.stack || e.message);
         process.exit(1);
     }
 }
 
 main();
+

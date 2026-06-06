@@ -2,6 +2,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const db = require('./db');
+const cheerio = require('cheerio');
 
 // Helper to make HTTPS requests
 function fetchPage(url) {
@@ -48,46 +49,114 @@ function downloadFile(url, destPath) {
 }
 
 // Parse Turkish brochure titles (e.g. "09 Haziran Salı") to YYYY-MM-DD
-function parseTurkishDate(titleText) {
-    const months = {
-        'ocak': 1, 'şubat': 2, 'mart': 3, 'nisan': 4,
-        'mayıs': 5, 'haziran': 6, 'temmuz': 7, 'ağustos': 8,
-        'eylül': 9, 'ekim': 10, 'kasım': 11, 'aralık': 12
-    };
-    
-    const cleaned = titleText.toLowerCase().trim();
-    const parts = cleaned.split(/\s+/);
-    
-    let day = 1;
-    let month = 6;
+// Parse Turkish brochure titles/ranges to YYYY-MM-DD
+const months = {
+    'ocak': 1, 'şubat': 2, 'mart': 3, 'nisan': 4, 'mayıs': 5, 'haziran': 6,
+    'temmuz': 7, 'ağustos': 8, 'eylül': 9, 'ekim': 10, 'kasım': 11, 'aralık': 12
+};
+
+function parseTurkishDateRange(titleText) {
     const now = new Date();
     let year = now.getFullYear();
-
-    if (parts.length >= 2) {
-        const dayPart = parts[0];
-        if (dayPart.includes('-')) {
-            day = parseInt(dayPart.split('-')[0], 10);
-        } else {
-            day = parseInt(dayPart, 10);
-        }
-        
-        const monthName = parts[1];
-        if (months[monthName]) {
-            month = months[monthName];
-        }
-    }
-    
-    // Year rollover detection (e.g. crawling in December for a January brochure)
     const currentMonth = now.getMonth() + 1; // 1-indexed
-    if (currentMonth === 12 && month === 1) {
-        year += 1;
-    } else if (currentMonth === 1 && month === 12) {
-        year -= 1;
-    }
+
+    const text = titleText.toLowerCase().trim().replace(/\s+/g, ' ');
     
-    const dayStr = String(day).padStart(2, '0');
-    const monthStr = String(month).padStart(2, '0');
-    return `${year}-${monthStr}-${dayStr}`;
+    // Helper to format date
+    const formatDate = (y, m, d) => {
+        const mStr = String(m).padStart(2, '0');
+        const dStr = String(d).padStart(2, '0');
+        return `${y}-${mStr}-${dStr}`;
+    };
+
+    // Helper to add days
+    const addDays = (dateStr, days) => {
+        const d = new Date(dateStr);
+        d.setDate(d.getDate() + days);
+        return d.toISOString().split('T')[0];
+    };
+
+    // Regex 1: Range across months (e.g. "24 Mart-31 Aralık", "30 Mayıs - 5 Haziran")
+    const rangeMonthsRegex = /(\d+)\s*([a-zşğçıöü]+)\s*-\s*(\d+)\s*([a-zşğçıöü]+)/;
+    let match = text.match(rangeMonthsRegex);
+    if (match) {
+        const startDay = parseInt(match[1], 10);
+        const startMonthName = match[2];
+        const endDay = parseInt(match[3], 10);
+        const endMonthName = match[4];
+        
+        const startMonth = months[startMonthName];
+        const endMonth = months[endMonthName];
+        
+        if (startMonth && endMonth) {
+            let startYear = year;
+            let endYear = year;
+            if (startMonth === 12 && endMonth === 1) {
+                endYear = startYear + 1;
+            }
+            return {
+                startDate: formatDate(startYear, startMonth, startDay),
+                endDate: formatDate(endYear, endMonth, endDay)
+            };
+        }
+    }
+
+    // Regex 2: Range within same month (e.g. "03-29 Haziran", "05-08 Haziran")
+    const rangeSameMonthRegex = /(\d+)\s*-\s*(\d+)\s+([a-zşğçıöü]+)/;
+    match = text.match(rangeSameMonthRegex);
+    if (match) {
+        const startDay = parseInt(match[1], 10);
+        const endDay = parseInt(match[2], 10);
+        const monthName = match[3];
+        const month = months[monthName];
+        
+        if (month) {
+            return {
+                startDate: formatDate(year, month, startDay),
+                endDate: formatDate(year, month, endDay)
+            };
+        }
+    }
+
+    // Regex 3: Single date with suffix (e.g. "4 Haziran'dan itibaren")
+    const relativeDateRegex = /(\d+)\s*([a-zşğçıöü]+)(?:'?[a-zşğçıöü]+)?\s*dan\s+itibaren|(\d+)\s*([a-zşğçıöü]+)(?:'?[a-zşğçıöü]+)?\s*tan\s+itibaren/i;
+    match = text.match(relativeDateRegex);
+    if (match) {
+        const day = parseInt(match[1] || match[3], 10);
+        const monthName = match[2] || match[4];
+        const month = months[monthName];
+        if (month) {
+            const startDate = formatDate(year, month, day);
+            const endDate = addDays(startDate, 7);
+            return { startDate, endDate };
+        }
+    }
+
+    // Regex 4: Single Date (e.g. "25 Mayıs Pazartesi")
+    const singleDateRegex = /(\d+)\s+([a-zşğçıöü]+)/;
+    match = text.match(singleDateRegex);
+    if (match) {
+        const day = parseInt(match[1], 10);
+        const monthName = match[2];
+        const month = months[monthName];
+        
+        if (month) {
+            let brochureYear = year;
+            if (currentMonth === 12 && month === 1) {
+                brochureYear += 1;
+            } else if (currentMonth === 1 && month === 12) {
+                brochureYear -= 1;
+            }
+            const startDate = formatDate(brochureYear, month, day);
+            const endDate = addDays(startDate, 7);
+            return { startDate, endDate };
+        }
+    }
+
+    // Default Fallback
+    const startDate = formatDate(year, currentMonth, now.getDate());
+    const endDate = addDays(startDate, 7);
+    return { startDate, endDate };
 }
 
 async function scrapeBim() {
@@ -125,12 +194,9 @@ async function scrapeBim() {
     
     // Process top 5 brochures (usually covers the upcoming and current brochures)
     for (const b of brochuresFound.slice(0, 5)) {
-        const startDate = parseTurkishDate(b.title);
-        
-        // Calculate end date (7 days validity)
-        const startTimestamp = new Date(startDate).getTime();
-        const endTimestamp = startTimestamp + 7 * 24 * 60 * 60 * 1000;
-        const endDate = new Date(endTimestamp).toISOString().split('T')[0];
+        const dates = parseTurkishDateRange(b.title);
+        const startDate = dates.startDate;
+        const endDate = dates.endDate;
         
         // Check if brochure already exists
         const existRows = await db.query(
@@ -143,22 +209,39 @@ async function scrapeBim() {
             continue;
         }
         
-        console.log(`🌟 [BİM Scraper] Yeni katalog bulundu! İndiriliyor: "${b.title}" (${startDate})`);
+        console.log(`🌟 [BİM Scraper] Yeni katalog bulundu! İndiriliyor: "${b.title}" (${startDate} -> ${endDate})`);
         
         // Fetch brochure details page
         const detailUrl = `https://www.bim.com.tr/Categories/680/afisler.aspx?top=1&Bim_AfisKey=${b.key}`;
         const detailHtml = await fetchPage(detailUrl);
         
-        // Extract page images
-        const imgRegex = /data-bigimg="([^"]+)"/g;
+        // Segment page images using cheerio (only extract images from matching brochure block)
+        const $ = cheerio.load(detailHtml);
         const imageUrls = [];
-        let imgMatch;
         
-        while ((imgMatch = imgRegex.exec(detailHtml)) !== null) {
-            const url = imgMatch[1];
-            if (!imageUrls.includes(url)) {
-                imageUrls.push(url);
+        $('.row.item').each((i, row) => {
+            const rowTitle = $(row).prev().text().trim().toLowerCase();
+            const brochureTitleLower = b.title.toLowerCase().trim();
+            
+            if (rowTitle && (rowTitle.includes(brochureTitleLower) || brochureTitleLower.includes(rowTitle))) {
+                $(row).find('[data-bigimg]').each((j, a) => {
+                    const imgUrl = $(a).attr('data-bigimg');
+                    if (imgUrl && !imageUrls.includes(imgUrl)) {
+                        imageUrls.push(imgUrl);
+                    }
+                });
             }
+        });
+        
+        // Fallback: If no matching block was found, extract all data-bigimg elements from the page
+        if (imageUrls.length === 0) {
+            console.log(`[BİM Scraper] Segment eşleşmesi bulunamadı, tüm sayfa genelindeki görseller taranıyor...`);
+            $('[data-bigimg]').each((j, a) => {
+                const imgUrl = $(a).attr('data-bigimg');
+                if (imgUrl && !imageUrls.includes(imgUrl)) {
+                    imageUrls.push(imgUrl);
+                }
+            });
         }
         
         if (imageUrls.length === 0) {

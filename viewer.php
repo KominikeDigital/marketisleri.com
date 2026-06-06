@@ -419,20 +419,24 @@ if (!$is_pdf) {
                 highlightActiveThumbnail(0);
             }
 
-            window.prevPage = function() {
+            function prevPage() {
                 if (currentPage <= 0) return;
                 queueRenderPage(currentPage);
-            };
+            }
 
-            window.nextPage = function() {
+            function nextPage() {
                 if (currentPage >= totalPages - 1) return;
                 queueRenderPage(currentPage + 2);
-            };
+            }
 
-            window.goToPage = function(index) {
+            function goToPage(index) {
                 if (index < 0 || index >= totalPages) return;
                 queueRenderPage(index + 1);
-            };
+            }
+
+            window.prevPage = prevPage;
+            window.nextPage = nextPage;
+            window.goToPage = goToPage;
 
         } else {
             // Image Pages Logic
@@ -440,17 +444,17 @@ if (!$is_pdf) {
             totalPages = pagesArray.length;
             currentPage = 0;
 
-            window.prevPage = function() {
+            function prevPage() {
                 if (currentPage <= 0) return;
                 goToPage(currentPage - 1);
-            };
+            }
 
-            window.nextPage = function() {
+            function nextPage() {
                 if (currentPage >= totalPages - 1) return;
                 goToPage(currentPage + 1);
-            };
+            }
 
-            window.goToPage = function(index) {
+            function goToPage(index) {
                 if (index < 0 || index >= totalPages) return;
                 currentPage = index;
                 
@@ -462,7 +466,11 @@ if (!$is_pdf) {
                 
                 document.getElementById('pageNo').innerText = 'Sayfa ' + (currentPage + 1) + ' / ' + totalPages;
                 highlightActiveThumbnail(currentPage);
-            };
+            }
+
+            window.prevPage = prevPage;
+            window.nextPage = nextPage;
+            window.goToPage = goToPage;
         }
 
         function highlightActiveThumbnail(index) {
