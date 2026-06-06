@@ -154,6 +154,10 @@ $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
             animation: float-orb-2 20s ease-in-out infinite;
         }
     </style>
+    
+    <!-- Google AdSense -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
+         crossorigin="anonymous"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
 
