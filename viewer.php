@@ -13,7 +13,7 @@ $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
 
 // Fetch brochure metadata with market info
-$stmt = $pdo->prepare("SELECT b.*, m.name as market_name, m.logo as market_logo, m.description as market_desc 
+$stmt = $pdo->prepare("SELECT b.*, m.name as market_name, m.logo as market_logo, m.slug as market_slug, m.description as market_desc 
                        FROM brochures b 
                        JOIN markets m ON b.market_id = m.id 
                        WHERE b.id = ?");
@@ -58,11 +58,13 @@ if (!$is_pdf) {
     <link rel="icon" type="image/png" href="<?= htmlspecialchars($site_url) ?>/uploads/logo.png">
     
     <!-- Typography & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Compiled Tailwind CSS -->
+    <link rel="stylesheet" href="uploads/tailwind.min.css">
     
     <!-- PDF.js CDN (Loaded only if PDF brochure) -->
     <?php if ($is_pdf): ?>
@@ -202,7 +204,7 @@ if (!$is_pdf) {
             <!-- Right Column: Sidebar Details & Ads (lg:col-span-1) -->
             <div class="space-y-6">
                 <!-- Market Info Box -->
-                <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-5">
+                <a href="market.php?slug=<?= htmlspecialchars($brochure['market_slug']) ?>" class="block bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition space-y-5 group">
                     <div class="flex items-center gap-3">
                         <div class="w-14 h-14 rounded-2xl border border-slate-100 p-1 flex items-center justify-center shrink-0 shadow-sm bg-white">
                             <?php if ($brochure['market_logo']): ?>
@@ -212,17 +214,20 @@ if (!$is_pdf) {
                             <?php endif; ?>
                         </div>
                         <div>
-                            <h3 class="font-title text-lg font-black text-slate-900 leading-tight"><?= htmlspecialchars($brochure['market_name']) ?></h3>
-                            <span class="text-xs text-red-600 font-bold">Katalog Sahibi</span>
+                            <h3 class="font-title text-lg font-black text-slate-900 leading-tight group-hover:text-red-600 transition-colors"><?= htmlspecialchars($brochure['market_name']) ?></h3>
+                            <span class="text-xs text-red-600 font-bold flex items-center gap-0.5">
+                                Tüm Broşürleri Gör
+                                <span class="material-symbols-outlined text-xs">open_in_new</span>
+                            </span>
                         </div>
                     </div>
-
+ 
                     <?php if ($brochure['market_desc']): ?>
                         <p class="text-slate-500 text-xs leading-relaxed border-t border-slate-100 pt-4">
                             <?= htmlspecialchars($brochure['market_desc']) ?>
                         </p>
                     <?php endif; ?>
-                </div>
+                </a>
 
                 <!-- Brochure Details Box -->
                 <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">

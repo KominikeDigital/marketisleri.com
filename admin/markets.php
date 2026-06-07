@@ -113,9 +113,11 @@ $markets = $markets_stmt->fetchAll();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Market Yönetimi - marketisleri.com</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+    <link rel="stylesheet" href="../uploads/tailwind.min.css">
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
         .font-title { font-family: 'Plus Jakarta Sans', sans-serif; }
@@ -266,8 +268,8 @@ $markets = $markets_stmt->fetchAll();
     </main>
 
     <!-- Modal Form -->
-    <div id="modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-250">
+    <div id="modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto flex items-start justify-center p-4 md:p-10">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl my-auto animate-in fade-in zoom-in duration-250">
             <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950/40">
                 <h3 id="modal-title" class="font-title text-xl font-bold text-white">Yeni Market Ekle</h3>
                 <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">

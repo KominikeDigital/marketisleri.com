@@ -131,11 +131,13 @@ $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
     <link rel="icon" type="image/png" href="<?= htmlspecialchars($site_url) ?>/uploads/logo.png">
     
     <!-- Typography & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Compiled Tailwind CSS -->
+    <link rel="stylesheet" href="uploads/tailwind.min.css">
     
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
@@ -177,7 +179,7 @@ $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
         <section id="hero-section" class="text-center py-16 bg-gradient-to-tr from-slate-950 via-red-950 to-slate-950 rounded-3xl border border-slate-800 relative overflow-hidden px-4 shadow-xl shadow-red-950/10">
             <!-- Video Background -->
             <?php if (file_exists('uploads/hero.mp4')): ?>
-                <video autoplay muted loop playsinline class="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none mix-blend-lighten">
+                <video autoplay muted loop playsinline preload="none" class="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none mix-blend-lighten hidden md:block">
                     <source src="uploads/hero.mp4" type="video/mp4">
                 </video>
             <?php endif; ?>
@@ -272,9 +274,9 @@ $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
             
             <div class="flex gap-4 overflow-x-auto no-scrollbar pb-3">
                 <?php foreach ($markets as $m): ?>
-                    <a href="index.php?market=<?= $m['id'] ?>&tab=<?= $selected_tab ?><?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                    <a href="market.php?slug=<?= htmlspecialchars($m['slug']) ?>" 
                        class="flex flex-col items-center gap-2 shrink-0 group">
-                        <div class="w-16 h-16 rounded-full border bg-white flex items-center justify-center p-1 shadow-sm transition-all group-hover:scale-110 <?= $selected_market === $m['id'] ? 'border-2 border-red-600 shadow-md shadow-red-600/5' : 'border-slate-200' ?>">
+                        <div class="w-16 h-16 rounded-full border border-slate-200 bg-white flex items-center justify-center p-1 shadow-sm transition-all group-hover:scale-110 group-hover:border-red-600/50">
                             <?php if ($m['logo']): ?>
                                 <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
                                      class="w-full h-full object-contain rounded-full" 
@@ -285,7 +287,7 @@ $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
                                 </div>
                             <?php endif; ?>
                         </div>
-                        <span class="text-xs font-bold text-slate-600 group-hover:text-red-600 transition-colors <?= $selected_market === $m['id'] ? 'text-red-600' : '' ?>">
+                        <span class="text-xs font-bold text-slate-600 group-hover:text-red-600 transition-colors">
                             <?= htmlspecialchars($m['name']) ?>
                         </span>
                     </a>
@@ -348,7 +350,11 @@ $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
                 </div>
             <?php else: ?>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-                    <?php foreach ($brochures as $b): ?>
+                    <?php 
+                    $bIndex = 0;
+                    foreach ($brochures as $b): 
+                        $lazyLoading = ($bIndex < 4) ? 'fetchpriority="high" loading="eager"' : 'loading="lazy"';
+                    ?>
                         <div class="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 group cursor-pointer flex flex-col relative"
                              onclick="window.location='viewer.php?id=<?= $b['id'] ?>'">
                             
@@ -357,7 +363,7 @@ $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
                                 <img src="uploads/brochures/<?= htmlspecialchars($b['cover_image']) ?>" 
                                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                      alt="<?= htmlspecialchars($b['title']) ?>"
-                                     fetchpriority="high"
+                                     <?= $lazyLoading ?>
                                      onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'100\'><rect width=\'80\' height=\'100\' fill=\'%23f1f5f9\'/><text x=\'50%%27 y=\'50%%27 dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'10\' fill=\'%2394a3b8\'>RESİM YOK</text></svg>'">
                                 
                                 <!-- Dynamic countdown badge -->
@@ -431,7 +437,10 @@ $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
                                 </div>
                             </div>
                         </div>
-                    <?php endforeach; ?>
+                    <?php 
+                        $bIndex++;
+                    endforeach; 
+                    ?>
                 </div>
             <?php endif; ?>
         </section>
