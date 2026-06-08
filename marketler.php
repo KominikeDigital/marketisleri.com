@@ -58,6 +58,23 @@ $markets = $pdo->query("
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
         .font-title { font-family: 'Plus Jakarta Sans', sans-serif; }
+        
+        /* Custom layout classes since pruned tailwind.min.css does not include these rules */
+        #markets-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        }
+        @media (min-width: 768px) {
+            #markets-grid {
+                grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            }
+        }
+        .market-logo-img {
+            height: 60% !important;
+            width: auto !important;
+            max-width: 85% !important;
+            object-fit: contain !important;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
@@ -140,7 +157,7 @@ $markets = $pdo->query("
                         <div class="w-full aspect-square rounded-xl md:rounded-2xl bg-white border border-slate-100 p-2 md:p-3 flex items-center justify-center shadow-inner transition-transform group-hover:scale-105 duration-300 relative">
                             <?php if ($m['logo']): ?>
                                 <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
-                                     class="h-[60%] w-auto max-w-[85%] object-contain rounded-lg md:rounded-xl" 
+                                     class="market-logo-img rounded-lg md:rounded-xl" 
                                      alt="<?= htmlspecialchars($m['name']) ?>"
                                      onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'80\'><rect width=\'80\' height=\'80\' fill=\'%23f8fafc\'/><text x=\'50%%27 y=\'50%%27 dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'14\' font-weight=\'bold\' fill=\'%23cbd5e1\'><?= substr(htmlspecialchars($m['name']), 0, 3) ?></text></svg>'">
                             <?php else: ?>
