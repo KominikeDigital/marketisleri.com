@@ -12,9 +12,9 @@ date_default_timezone_set('Europe/Istanbul');
 // For cPanel MySQL, either edit these variables or create config.local.php from config.local.example.php.
 $db_driver = 'auto'; // auto, sqlite, mysql
 $db_host = 'localhost';
-$db_name = 'VERITABANI_ADINIZ';
-$db_user = 'VERITABANI_KULLANICINIZ';
-$db_pass = 'VERITABANI_SIFRENIZ';
+$db_name = 'marketis_market';
+$db_user = 'marketis_market';
+$db_pass = 'CkWN1Opjn(*N2o0;';
 $db_path = __DIR__ . '/database.db';
 
 $local_config = __DIR__ . '/config.local.php';
