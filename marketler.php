@@ -64,10 +64,10 @@ $markets = $pdo->query("
 
     <!-- Header Navigation -->
     <header class="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+        <div class="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between">
             <a href="index.php" class="flex items-center gap-2">
                 <?php if (file_exists('uploads/logo.png')): ?>
-                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-10 w-auto object-contain">
+                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-16 w-auto object-contain">
                 <?php else: ?>
                     <span class="font-title text-base font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                         <span class="text-red-600 material-symbols-outlined font-black">receipt_long</span>
@@ -129,18 +129,18 @@ $markets = $pdo->query("
 
         <!-- Markets Grid -->
         <section>
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6" id="markets-grid">
+            <div class="grid grid-cols-3 md:grid-cols-5 gap-4 md:gap-6" id="markets-grid">
                 <?php foreach ($markets as $m): ?>
-                    <div class="market-card bg-white border border-slate-100 rounded-3xl p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col items-center justify-between text-center cursor-pointer group relative"
+                    <div class="market-card bg-white border border-slate-100 rounded-2xl md:rounded-3xl p-3 md:p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col items-center justify-between text-center cursor-pointer group relative"
                          data-name="<?= strtolower(htmlspecialchars($m['name'])) ?>"
                          data-category="<?= $m['category_id'] ?>"
                          onclick="window.location='market.php?slug=<?= htmlspecialchars($m['slug']) ?>'">
                         
                         <!-- Logo Container -->
-                        <div class="w-24 h-24 rounded-2xl bg-white border border-slate-100 p-2 flex items-center justify-center shadow-inner transition-transform group-hover:scale-105 duration-300 relative">
+                        <div class="w-full aspect-square rounded-xl md:rounded-2xl bg-white border border-slate-100 p-2 md:p-3 flex items-center justify-center shadow-inner transition-transform group-hover:scale-105 duration-300 relative">
                             <?php if ($m['logo']): ?>
                                 <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
-                                     class="w-full h-full object-contain rounded-xl" 
+                                     class="h-[60%] w-auto max-w-[85%] object-contain rounded-lg md:rounded-xl" 
                                      alt="<?= htmlspecialchars($m['name']) ?>"
                                      onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'80\'><rect width=\'80\' height=\'80\' fill=\'%23f8fafc\'/><text x=\'50%%27 y=\'50%%27 dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'14\' font-weight=\'bold\' fill=\'%23cbd5e1\'><?= substr(htmlspecialchars($m['name']), 0, 3) ?></text></svg>'">
                             <?php else: ?>

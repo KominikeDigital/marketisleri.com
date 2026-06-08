@@ -43,9 +43,11 @@ echo "Sistem zamanı: " . date('Y-m-d H:i:s') . "\n";
 echo "Çalışma dizini: " . __DIR__ . "\n";
 
 // Path to scraper
-$scraper_path = realpath(__DIR__ . '/../scraper/index.js');
+$run_type = $_GET['type'] ?? 'all';
+$script_name = ($run_type === 'custom') ? 'import_custom.js' : 'index.js';
+$scraper_path = realpath(__DIR__ . '/../scraper/' . $script_name);
 if (!$scraper_path) {
-    echo "<span class='error'>Hata: scraper/index.js bulunamadı!</span>\n";
+    echo "<span class='error'>Hata: scraper/$script_name bulunamadı!</span>\n";
     exit;
 }
 
