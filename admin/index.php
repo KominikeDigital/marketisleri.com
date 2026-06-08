@@ -77,6 +77,10 @@ $recent_brochures = $recent_stmt->fetchAll();
                 <span class="material-symbols-outlined text-lg">menu_book</span>
                 Broşürler
             </a>
+            <a href="magic_import.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">auto_fix</span>
+                Sihirli Broşür Ekle
+            </a>
             <a href="subscribers.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
                 <span class="material-symbols-outlined text-lg">mail</span>
                 Aboneler
@@ -233,6 +237,13 @@ $recent_brochures = $recent_stmt->fetchAll();
                                 <span class="flex items-center gap-3">
                                     <span class="material-symbols-outlined text-emerald-400">add_to_photos</span>
                                     <span class="font-semibold text-sm">Broşür Ekle/Yönet</span>
+                                </span>
+                                <span class="material-symbols-outlined text-sm text-slate-500">chevron_right</span>
+                            </a>
+                            <a href="magic_import.php" class="flex items-center justify-between p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition">
+                                <span class="flex items-center gap-3">
+                                    <span class="material-symbols-outlined text-purple-400">auto_fix</span>
+                                    <span class="font-semibold text-sm">Sihirli Broşür Yükle (URL / PDF / Görsel)</span>
                                 </span>
                                 <span class="material-symbols-outlined text-sm text-slate-500">chevron_right</span>
                             </a>

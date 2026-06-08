@@ -223,6 +223,10 @@ $brochures = $brochures_stmt->fetchAll();
                 <span class="material-symbols-outlined text-lg">menu_book</span>
                 Broşürler
             </a>
+            <a href="magic_import.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">auto_fix</span>
+                Sihirli Broşür Ekle
+            </a>
             <a href="subscribers.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
                 <span class="material-symbols-outlined text-lg">mail</span>
                 Aboneler
