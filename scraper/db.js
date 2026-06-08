@@ -27,12 +27,19 @@ function readPhpValue(content, variableName, constantName, fallback) {
     return fallback;
 }
 
-function applyPhpConfig(filePath) {
+function applyPhpConfig(filePath, isProduction = false) {
     if (!fs.existsSync(filePath)) {
         return;
     }
 
-    const configContent = fs.readFileSync(filePath, 'utf8');
+    let configContent = fs.readFileSync(filePath, 'utf8');
+
+    if (filePath.endsWith('config.php') && isProduction) {
+        const elseMatch = configContent.match(/else\s*\{([\s\S]*?)\}/);
+        if (elseMatch) {
+            configContent = elseMatch[1];
+        }
+    }
 
     db_driver = readPhpValue(configContent, 'db_driver', 'DB_DRIVER', db_driver).toLowerCase();
     db_host = readPhpValue(configContent, 'db_host', 'DB_HOST', db_host);
@@ -51,8 +58,9 @@ function hasMysqlConfig() {
 }
 
 try {
-    applyPhpConfig(configPath);
-    applyPhpConfig(localConfigPath);
+    const isProd = !fs.existsSync(localConfigPath);
+    applyPhpConfig(configPath, isProd);
+    applyPhpConfig(localConfigPath, false);
 
     db_driver = (process.env.DB_DRIVER || db_driver).toLowerCase();
     db_host = process.env.DB_HOST || db_host;
