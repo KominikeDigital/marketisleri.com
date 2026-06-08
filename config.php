@@ -298,19 +298,25 @@ try {
 }
 
 // Database Migrations for Scraper settings in markets table
-try {
-    $pdo->query("SELECT scraper_url FROM markets LIMIT 1");
-} catch (PDOException $e) {
+$columns_to_add = [
+    'scraper_url' => 'TEXT DEFAULT NULL',
+    'scraper_container' => 'VARCHAR(255) DEFAULT NULL',
+    'scraper_title' => 'VARCHAR(255) DEFAULT NULL',
+    'scraper_cover' => 'VARCHAR(255) DEFAULT NULL',
+    'scraper_detail_link' => 'VARCHAR(255) DEFAULT NULL',
+    'scraper_page_image' => 'VARCHAR(255) DEFAULT NULL',
+    'scraper_active' => 'INT DEFAULT 0'
+];
+
+foreach ($columns_to_add as $col => $type) {
     try {
-        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_url TEXT DEFAULT NULL");
-        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_container VARCHAR(255) DEFAULT NULL");
-        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_title VARCHAR(255) DEFAULT NULL");
-        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_cover VARCHAR(255) DEFAULT NULL");
-        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_detail_link VARCHAR(255) DEFAULT NULL");
-        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_page_image VARCHAR(255) DEFAULT NULL");
-        $pdo->exec("ALTER TABLE markets ADD COLUMN scraper_active INT DEFAULT 0");
-    } catch (PDOException $ex) {
-        // Fail silently
+        $pdo->query("SELECT $col FROM markets LIMIT 1");
+    } catch (PDOException $e) {
+        try {
+            $pdo->exec("ALTER TABLE markets ADD COLUMN $col $type");
+        } catch (PDOException $ex) {
+            // Fail silently
+        }
     }
 }
 
@@ -327,44 +333,64 @@ try {
 }
 
 // Ensure and configure scraper markets
-try {
-    $ensure_market = function($pdo, $name, $slug, $logo, $desc, $cat_id) {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM markets WHERE slug = ?");
-        $stmt->execute([$slug]);
-        if ($stmt->fetchColumn() == 0) {
+$ensure_market = function($pdo, $name, $slug, $logo, $desc, $cat_id) {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM markets WHERE slug = ?");
+    $stmt->execute([$slug]);
+    if ($stmt->fetchColumn() == 0) {
+        try {
             $insert = $pdo->prepare("INSERT INTO markets (name, slug, logo, description, category_id) VALUES (?, ?, ?, ?, ?)");
             $insert->execute([$name, $slug, $logo, $desc, $cat_id]);
+        } catch (PDOException $e) {
+            // Fallback without category_id if foreign key fails
+            try {
+                $insert = $pdo->prepare("INSERT INTO markets (name, slug, logo, description) VALUES (?, ?, ?, ?)");
+                $insert->execute([$name, $slug, $logo, $desc]);
+            } catch (PDOException $ex) {
+                // Fail silently
+            }
         }
-    };
-
-    $ensure_market($pdo, 'Metro', 'metro', 'metro.png', 'Metro İndirim ve Fırsatları', 1);
-    $ensure_market($pdo, 'Tarım Kredi Market', 'tarim-kredi-market', 'tarim-kredi-market.png', 'Tarım Kredi Market İndirim ve Fırsatları', 1);
-
-    $scrapers = [
-        'migros' => 'https://aktuelbrosurler.com/migros/brosurler',
-        'carrefoursa' => 'https://aktuelbrosurler.com/carrefour/brosurler',
-        'tarim-kredi-market' => 'https://aktuelbrosurler.com/tarim-kredi-kooperatif_market/brosurler',
-        'metro' => 'https://aktuelbrosurler.com/metrotoptancimarket/brosurler',
-        'ozdilek' => 'https://aktuelbrosurler.com/ozdilek/brosurler',
-        'file' => 'https://aktuelbrosurler.com/file-market/brosurler',
-        'bizim-toptan-satis-magazalari' => 'https://aktuelbrosurler.com/bizimtoptanmarket/brosurler'
-    ];
-
-    $update_stmt = $pdo->prepare("UPDATE markets SET 
-        scraper_url = ?, 
-        scraper_container = 'a.brosur-link', 
-        scraper_title = '.excerpt p', 
-        scraper_cover = '.media-wrapper', 
-        scraper_detail_link = '', 
-        scraper_page_image = '', 
-        scraper_active = 1 
-        WHERE slug = ?");
-
-    foreach ($scrapers as $slug => $url) {
-        $update_stmt->execute([$url, $slug]);
     }
-} catch (PDOException $e) {
-    // Fail silently
+};
+
+try {
+    $ensure_market($pdo, 'Metro', 'metro', 'metro.png', 'Metro İndirim ve Fırsatları', 1);
+} catch (Exception $e) {}
+
+try {
+    // Check both standard and production specific slug for Tarım Kredi
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM markets WHERE slug = 'tar-m-kredi-market-1780824588' OR slug = 'tarim-kredi-market'");
+    $stmt->execute();
+    if ($stmt->fetchColumn() == 0) {
+        $ensure_market($pdo, 'Tarım Kredi Market', 'tarim-kredi-market', 'tarim-kredi-market.png', 'Tarım Kredi Market İndirim ve Fırsatları', 1);
+    }
+} catch (Exception $e) {}
+
+$scrapers = [
+    'migros' => 'https://aktuelbrosurler.com/migros/brosurler',
+    'carrefoursa' => 'https://aktuelbrosurler.com/carrefour/brosurler',
+    'tarim-kredi-market' => 'https://aktuelbrosurler.com/tarim-kredi-kooperatif_market/brosurler',
+    'tar-m-kredi-market-1780824588' => 'https://aktuelbrosurler.com/tarim-kredi-kooperatif_market/brosurler',
+    'metro' => 'https://aktuelbrosurler.com/metrotoptancimarket/brosurler',
+    'ozdilek' => 'https://aktuelbrosurler.com/ozdilek/brosurler',
+    'file' => 'https://aktuelbrosurler.com/file-market/brosurler',
+    'bizim-toptan-satis-magazalari' => 'https://aktuelbrosurler.com/bizimtoptanmarket/brosurler'
+];
+
+foreach ($scrapers as $slug => $url) {
+    try {
+        $update_stmt = $pdo->prepare("UPDATE markets SET 
+            scraper_url = ?, 
+            scraper_container = 'a.brosur-link', 
+            scraper_title = '.excerpt p', 
+            scraper_cover = '.media-wrapper', 
+            scraper_detail_link = '', 
+            scraper_page_image = '', 
+            scraper_active = 1 
+            WHERE slug = ?");
+        $update_stmt->execute([$url, $slug]);
+    } catch (PDOException $e) {
+        // Fail silently for this market, continue with others
+    }
 }
 
 
