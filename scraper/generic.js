@@ -4,33 +4,61 @@ const path = require('path');
 const db = require('./db');
 const cheerio = require('cheerio');
 
-// Helper to make HTTPS requests and handle redirects
-function fetchPage(url, depth = 0) {
+// Helper to merge new cookies into existing cookie string
+function mergeCookies(existingCookies, setCookieHeaders = []) {
+    if (setCookieHeaders.length === 0) return existingCookies;
+    const cookieParts = setCookieHeaders.map(c => c.split(';')[0]);
+    const cookieMap = {};
+    if (existingCookies) {
+        existingCookies.split('; ').forEach(c => {
+            const [k, v] = c.split('=');
+            if (k) cookieMap[k] = v;
+        });
+    }
+    cookieParts.forEach(c => {
+        const [k, v] = c.split('=');
+        if (k) cookieMap[k] = v;
+    });
+    return Object.entries(cookieMap).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+// Helper to make HTTPS requests and handle redirects, returning cookies
+function fetchPageWithDetails(url, referer = '', cookies = '', depth = 0) {
     if (depth > 5) return Promise.reject(new Error('Too many redirects'));
     return new Promise((resolve, reject) => {
         try {
             const parsedUrl = new URL(url);
+            const headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Connection': 'keep-alive'
+            };
+            if (referer) headers['Referer'] = referer;
+            if (cookies) headers['Cookie'] = cookies;
+
             const options = {
                 hostname: parsedUrl.hostname,
                 path: parsedUrl.pathname + parsedUrl.search,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3'
-                }
+                headers: headers
             };
             https.get(options, (res) => {
+                const updatedCookies = mergeCookies(cookies, res.headers['set-cookie'] || []);
+
                 if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
                     let redirectUrl = res.headers.location;
                     if (!redirectUrl.startsWith('http')) {
                         const origin = `${parsedUrl.protocol}//${parsedUrl.host}`;
                         redirectUrl = new URL(redirectUrl, origin).toString();
                     }
-                    return fetchPage(redirectUrl, depth + 1).then(resolve).catch(reject);
+                    return fetchPageWithDetails(redirectUrl, referer, updatedCookies, depth + 1).then(resolve).catch(reject);
                 }
+                
                 let data = '';
                 res.on('data', (chunk) => { data += chunk; });
-                res.on('end', () => { resolve(data); });
+                res.on('end', () => { 
+                    resolve({ data, cookies: updatedCookies }); 
+                });
             }).on('error', (err) => { reject(err); });
         } catch (e) {
             reject(e);
@@ -38,8 +66,14 @@ function fetchPage(url, depth = 0) {
     });
 }
 
-// Helper to download files asynchronously
-function downloadFile(url, destPath) {
+// Helper to make HTTPS requests and handle redirects (backward compatible wrapper)
+async function fetchPage(url, depth = 0) {
+    const res = await fetchPageWithDetails(url, '', '', depth);
+    return res.data;
+}
+
+// Helper to download files asynchronously with custom headers support
+function downloadFile(url, destPath, customHeaders = {}) {
     return new Promise((resolve, reject) => {
         const dir = path.dirname(destPath);
         if (!fs.existsSync(dir)){
@@ -49,13 +83,14 @@ function downloadFile(url, destPath) {
         const parsedUrl = new URL(url);
         const origin = `${parsedUrl.protocol}//${parsedUrl.host}/`;
         
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': origin,
+            ...customHeaders
+        };
+        
         const file = fs.createWriteStream(destPath);
-        https.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': origin
-            }
-        }, (response) => {
+        https.get(url, { headers }, (response) => {
             if (response.statusCode !== 200) {
                 reject(new Error(`Görsel indirilemedi, HTTP durum kodu: ${response.statusCode}`));
                 return;
@@ -211,7 +246,17 @@ async function scrapeGenericActiveMarkets() {
         console.log(`\n🔍 [Generic Scraper] ${market.name} için tarama başlatıldı: ${market.scraper_url}`);
         
         try {
-            const html = await fetchPage(market.scraper_url);
+            let marketSessionCookies = '';
+            let html = '';
+            try {
+                const listRes = await fetchPageWithDetails(market.scraper_url, '', '');
+                html = listRes.data;
+                marketSessionCookies = listRes.cookies;
+            } catch (e) {
+                console.error(`❌ [Generic Scraper] ${market.name} listesi yüklenemedi:`, e.message);
+                continue;
+            }
+
             const $ = cheerio.load(html);
             const containerSelector = market.scraper_container;
             
@@ -280,64 +325,28 @@ async function scrapeGenericActiveMarkets() {
                 
                 console.log(`🌟 [Generic Scraper] Yeni broşür bulundu: "${title}" (${startDate})`);
                 
-                // 1. Download cover
-                const coverName = `${market.slug}_gen_${i}_cover_${timestamp}.jpg`;
-                const coverDest = path.join(uploadsDir, 'brochures', coverName);
-                
-                try {
-                    await downloadFile(coverUrl, coverDest);
-                } catch (err) {
-                    console.error(`  ❌ Kapak indirilemedi (${coverUrl}):`, err.message);
-                    continue;
-                }
-                
-                // 2. Insert brochure
-                let insertResult;
-                try {
-                    insertResult = await db.query(
-                        "INSERT INTO brochures (market_id, title, cover_image, start_date, end_date) VALUES (?, ?, ?, ?, ?)",
-                        [market.id, title, coverName, startDate, endDate]
-                    );
-                } catch (err) {
-                    console.error(`  ❌ Veritabanına katalog eklenemedi:`, err.message);
-                    fs.unlink(coverDest, () => {});
-                    continue;
-                }
-                const brochureId = insertResult.insertId;
-                
-                // 3. Handle pages
+                // 1. Handle pages and cookies first to obtain iframeUrl and session cookies
                 let pageImages = [];
+                let cardCookies = marketSessionCookies;
+                let iframeUrl = '';
+                
                 if (detailUrl) {
                     if (detailUrl.includes('aktuelbrosurler.com')) {
                         console.log(`  -> aktuelbrosurler.com detay sayfası taranıyor: ${detailUrl}`);
                         try {
-                            const detailHtml = await fetchPage(detailUrl);
+                            const detailRes = await fetchPageWithDetails(detailUrl, market.scraper_url, cardCookies);
+                            cardCookies = detailRes.cookies;
+                            const detailHtml = detailRes.data;
+                            
                             const iframeMatch = detailHtml.match(/brosur\.aspx\?id=([a-f0-9]+)/i);
                             if (iframeMatch) {
                                 const iframeId = iframeMatch[1];
-                                const iframeUrl = `https://aktuelbrosurler.com/brosur.aspx?id=${iframeId}`;
+                                iframeUrl = `https://aktuelbrosurler.com/brosur.aspx?id=${iframeId}`;
                                 console.log(`  -> Iframe taranıyor: ${iframeUrl}`);
                                 
-                                const iframeHtml = await new Promise((resolve, reject) => {
-                                    const parsedUrl = new URL(iframeUrl);
-                                    const options = {
-                                        hostname: parsedUrl.hostname,
-                                        path: parsedUrl.pathname + parsedUrl.search,
-                                        headers: {
-                                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                                            'Referer': detailUrl
-                                        }
-                                    };
-                                    https.get(options, (res) => {
-                                        if (res.statusCode !== 200) {
-                                            reject(new Error(`Iframe returned status code ${res.statusCode}`));
-                                            return;
-                                        }
-                                        let data = '';
-                                        res.on('data', (chunk) => { data += chunk; });
-                                        res.on('end', () => { resolve(data); });
-                                    }).on('error', reject);
-                                });
+                                const iframeRes = await fetchPageWithDetails(iframeUrl, detailUrl, cardCookies);
+                                cardCookies = iframeRes.cookies;
+                                const iframeHtml = iframeRes.data;
 
                                 const pageRegex = /'l':\s*'([^']+)'/g;
                                 let match;
@@ -355,7 +364,9 @@ async function scrapeGenericActiveMarkets() {
                     } else if (market.scraper_page_image) {
                         console.log(`  -> Detay sayfası taranıyor: ${detailUrl}`);
                         try {
-                            const detailHtml = await fetchPage(detailUrl);
+                            const detailRes = await fetchPageWithDetails(detailUrl, market.scraper_url, cardCookies);
+                            cardCookies = detailRes.cookies;
+                            const detailHtml = detailRes.data;
                             const $d = cheerio.load(detailHtml);
                             
                             $d(market.scraper_page_image).each((j, imgEl) => {
@@ -377,6 +388,44 @@ async function scrapeGenericActiveMarkets() {
                     pageImages.push(coverUrl);
                 }
                 
+                // 2. Download cover using proper headers
+                const coverName = `${market.slug}_gen_${i}_cover_${timestamp}.jpg`;
+                const coverDest = path.join(uploadsDir, 'brochures', coverName);
+                
+                try {
+                    let coverHeaders = {};
+                    if (coverUrl.includes('brosur.ashx')) {
+                        const refererUrl = iframeUrl || detailUrl || origin;
+                        coverHeaders = {
+                            'Cookie': cardCookies,
+                            'Referer': refererUrl,
+                            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                            'sec-fetch-site': 'same-origin',
+                            'sec-fetch-dest': 'image',
+                            'sec-fetch-mode': 'no-cors'
+                        };
+                    }
+                    await downloadFile(coverUrl, coverDest, coverHeaders);
+                } catch (err) {
+                    console.error(`  ❌ Kapak indirilemedi (${coverUrl}):`, err.message);
+                    continue;
+                }
+                
+                // 3. Insert brochure to database
+                let insertResult;
+                try {
+                    insertResult = await db.query(
+                        "INSERT INTO brochures (market_id, title, cover_image, start_date, end_date) VALUES (?, ?, ?, ?, ?)",
+                        [market.id, title, coverName, startDate, endDate]
+                    );
+                } catch (err) {
+                    console.error(`  ❌ Veritabanına katalog eklenemedi:`, err.message);
+                    fs.unlink(coverDest, () => {});
+                    continue;
+                }
+                const brochureId = insertResult.insertId;
+                
+                // 4. Download page images
                 console.log(`  -> Toplam ${pageImages.length} sayfa resmi indiriliyor...`);
                 for (let pNum = 1; pNum <= pageImages.length; pNum++) {
                     const pageUrl = pageImages[pNum - 1];
@@ -384,7 +433,19 @@ async function scrapeGenericActiveMarkets() {
                     const pageDest = path.join(uploadsDir, 'brochures/pages', pageName);
                     
                     try {
-                        await downloadFile(pageUrl, pageDest);
+                        let pageHeaders = {};
+                        if (pageUrl.includes('brosur.ashx')) {
+                            const refererUrl = iframeUrl || detailUrl || origin;
+                            pageHeaders = {
+                                'Cookie': cardCookies,
+                                'Referer': refererUrl,
+                                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                                'sec-fetch-site': 'same-origin',
+                                'sec-fetch-dest': 'image',
+                                'sec-fetch-mode': 'no-cors'
+                            };
+                        }
+                        await downloadFile(pageUrl, pageDest, pageHeaders);
                         await db.query(
                             "INSERT INTO brochure_pages (brochure_id, page_number, image_path) VALUES (?, ?, ?)",
                             [brochureId, pNum, pageName]
