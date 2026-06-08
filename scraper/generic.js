@@ -90,7 +90,7 @@ function downloadFile(url, destPath, customHeaders = {}) {
         };
         
         const file = fs.createWriteStream(destPath);
-        https.get(url, { headers }, (response) => {
+        const req = https.get(url, { headers, timeout: 15000 }, (response) => {
             if (response.statusCode !== 200) {
                 reject(new Error(`Görsel indirilemedi, HTTP durum kodu: ${response.statusCode}`));
                 return;
@@ -99,7 +99,15 @@ function downloadFile(url, destPath, customHeaders = {}) {
             file.on('finish', () => {
                 file.close(resolve);
             });
-        }).on('error', (err) => {
+        });
+        
+        req.on('timeout', () => {
+            req.destroy();
+            fs.unlink(destPath, () => {});
+            reject(new Error('Görsel indirme isteği zaman aşımına uğradı.'));
+        });
+        
+        req.on('error', (err) => {
             fs.unlink(destPath, () => {});
             reject(err);
         });
