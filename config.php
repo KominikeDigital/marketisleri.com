@@ -8,12 +8,31 @@ $admin_pass = "161224";
 
 date_default_timezone_set('Europe/Istanbul');
 
-// Environment detection
-$is_local = true;
-if (isset($_SERVER['HTTP_HOST'])) {
-    $host = strtolower($_SERVER['HTTP_HOST']);
-    $is_local = strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false;
+// Self-healing .htaccess creation
+$htaccess_path = __DIR__ . '/.htaccess';
+if (!is_file($htaccess_path)) {
+    $htaccess_content = "DirectoryIndex index.php index.html\n" .
+        "Options -Indexes\n\n" .
+        "<IfModule mod_rewrite.c>\n" .
+        "    RewriteEngine On\n\n" .
+        "    RewriteRule ^sitemap\\.xml$ sitemap.php [L]\n\n" .
+        "    RewriteRule ^(?:config(?:\\.local)?\\.php|database\\.(?:db|sql)|\\.env|\\.DS_Store)$ - [F,L]\n" .
+        "    RewriteRule ^(?:scraper|scratch)(?:/|$) - [F,L]\n" .
+        "</IfModule>\n\n" .
+        "<FilesMatch \"^(config(\\.local)?\\.php|database\\.(db|sql)|\\.env|\\.DS_Store|package(-lock)?\\.json)$\">\n" .
+        "    <IfModule mod_authz_core.c>\n" .
+        "        Require all denied\n" .
+        "    </IfModule>\n" .
+        "    <IfModule !mod_authz_core.c>\n" .
+        "        Order allow,deny\n" .
+        "        Deny from all\n" .
+        "    </IfModule>\n" .
+        "</FilesMatch>\n";
+    @file_put_contents($htaccess_path, $htaccess_content);
 }
+
+// Environment detection based on config.local.php existence
+$is_local = is_file(__DIR__ . '/config.local.php');
 
 if ($is_local) {
     // Local development settings (SQLite)

@@ -1,2 +1,5 @@
 config.local.php
 .DS_Store
+.htaccess
+database.db
+reset_git.php
