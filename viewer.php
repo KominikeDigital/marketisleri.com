@@ -93,6 +93,27 @@ if (!$is_pdf) {
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
 
+    <!-- Header Navigation -->
+    <header class="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+            <a href="index.php" class="flex items-center gap-2">
+                <?php if (file_exists('uploads/logo.png')): ?>
+                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-10 w-auto object-contain">
+                <?php else: ?>
+                    <span class="font-title text-base font-black text-slate-900 tracking-tight flex items-center gap-1.5">
+                        <span class="text-red-600 material-symbols-outlined font-black">receipt_long</span>
+                        marketisleri<span class="text-red-600">.com</span>
+                    </span>
+                <?php endif; ?>
+            </a>
+            
+            <nav class="flex items-center gap-6 text-sm font-bold text-slate-600">
+                <a href="index.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">home</span>Anasayfa</a>
+                <a href="marketler.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">storefront</span>Marketler</a>
+            </nav>
+        </div>
+    </header>
+
     <!-- Main Content Grid -->
     <main class="pt-8 max-w-7xl w-full mx-auto px-4 md:px-6 flex-1 pb-16">
         <!-- Back Navigation Link -->
@@ -310,6 +331,7 @@ if (!$is_pdf) {
 
             <!-- Legal Links -->
             <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-500 font-medium my-4 md:my-0">
+                <a href="marketler.php" class="hover:text-red-600 transition">Marketler</a>
                 <a href="gizlilik-politikasi.php" class="hover:text-red-600 transition">Gizlilik Politikası</a>
                 <a href="kullanim-kosullari.php" class="hover:text-red-600 transition">Kullanım Koşulları</a>
                 <a href="cerez-politikasi.php" class="hover:text-red-600 transition">Çerez Politikası</a>

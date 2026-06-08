@@ -373,7 +373,8 @@ $scrapers = [
     'metro' => 'https://aktuelbrosurler.com/metrotoptancimarket/brosurler',
     'ozdilek' => 'https://aktuelbrosurler.com/ozdilek/brosurler',
     'file' => 'https://aktuelbrosurler.com/file-market/brosurler',
-    'bizim-toptan-satis-magazalari' => 'https://aktuelbrosurler.com/bizimtoptanmarket/brosurler'
+    'bizim-toptan-satis-magazalari' => 'https://aktuelbrosurler.com/bizimtoptanmarket/brosurler',
+    'tespo-cash-carry' => 'https://aktuelbrosurler.com/tespo/brosurler'
 ];
 
 foreach ($scrapers as $slug => $url) {
