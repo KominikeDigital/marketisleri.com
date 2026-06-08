@@ -172,6 +172,12 @@ function getElementValue($, element, selector, attribute = null) {
     
     // Auto-detect common attributes if none provided
     const tagName = el.prop('tagName').toLowerCase();
+    if (el.attr('data-img')) {
+        return el.attr('data-img');
+    }
+    if (el.attr('data-src')) {
+        return el.attr('data-src');
+    }
     if (tagName === 'img') {
         return el.attr('src') || el.attr('data-src') || el.attr('data-original') || '';
     }
@@ -249,10 +255,13 @@ async function scrapeGenericActiveMarkets() {
                 let detailUrl = '';
                 if (market.scraper_detail_link) {
                     detailUrl = getElementValue($, card, market.scraper_detail_link);
-                    if (detailUrl) {
-                        if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
-                        if (!detailUrl.startsWith('http')) detailUrl = new URL(detailUrl, origin).toString();
-                    }
+                } else if ($(card).prop('tagName').toLowerCase() === 'a') {
+                    detailUrl = $(card).attr('href') || '';
+                }
+                
+                if (detailUrl) {
+                    if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
+                    if (!detailUrl.startsWith('http')) detailUrl = new URL(detailUrl, origin).toString();
                 }
                 
                 // Check if brochure already exists
@@ -294,22 +303,68 @@ async function scrapeGenericActiveMarkets() {
                 
                 // 3. Handle pages
                 let pageImages = [];
-                if (detailUrl && market.scraper_page_image) {
-                    console.log(`  -> Detay sayfası taranıyor: ${detailUrl}`);
-                    try {
-                        const detailHtml = await fetchPage(detailUrl);
-                        const $d = cheerio.load(detailHtml);
-                        
-                        $d(market.scraper_page_image).each((j, imgEl) => {
-                            let imgUrl = $d(imgEl).attr('src') || $d(imgEl).attr('data-src') || $d(imgEl).attr('data-original') || '';
-                            if (imgUrl && !pageImages.includes(imgUrl)) {
-                                if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
-                                if (!imgUrl.startsWith('http')) imgUrl = new URL(imgUrl, origin).toString();
-                                pageImages.push(imgUrl);
+                if (detailUrl) {
+                    if (detailUrl.includes('aktuelbrosurler.com')) {
+                        console.log(`  -> aktuelbrosurler.com detay sayfası taranıyor: ${detailUrl}`);
+                        try {
+                            const detailHtml = await fetchPage(detailUrl);
+                            const iframeMatch = detailHtml.match(/brosur\.aspx\?id=([a-f0-9]+)/i);
+                            if (iframeMatch) {
+                                const iframeId = iframeMatch[1];
+                                const iframeUrl = `https://aktuelbrosurler.com/brosur.aspx?id=${iframeId}`;
+                                console.log(`  -> Iframe taranıyor: ${iframeUrl}`);
+                                
+                                const iframeHtml = await new Promise((resolve, reject) => {
+                                    const parsedUrl = new URL(iframeUrl);
+                                    const options = {
+                                        hostname: parsedUrl.hostname,
+                                        path: parsedUrl.pathname + parsedUrl.search,
+                                        headers: {
+                                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                            'Referer': detailUrl
+                                        }
+                                    };
+                                    https.get(options, (res) => {
+                                        if (res.statusCode !== 200) {
+                                            reject(new Error(`Iframe returned status code ${res.statusCode}`));
+                                            return;
+                                        }
+                                        let data = '';
+                                        res.on('data', (chunk) => { data += chunk; });
+                                        res.on('end', () => { resolve(data); });
+                                    }).on('error', reject);
+                                });
+
+                                const pageRegex = /'l':\s*'([^']+)'/g;
+                                let match;
+                                while ((match = pageRegex.exec(iframeHtml)) !== null) {
+                                    let imgUrl = match[1].replace(/\\u0026/g, '&');
+                                    if (imgUrl && !pageImages.includes(imgUrl)) {
+                                        pageImages.push(imgUrl);
+                                    }
+                                }
+                                console.log(`  -> Iframe içinden ${pageImages.length} sayfa resmi ayıklandı.`);
                             }
-                        });
-                    } catch (err) {
-                        console.warn(`  ⚠️ Detay sayfası yüklenemedi:`, err.message);
+                        } catch (err) {
+                            console.warn(`  ⚠️ aktuelbrosurler.com detay sayfa/iframe tarama hatası:`, err.message);
+                        }
+                    } else if (market.scraper_page_image) {
+                        console.log(`  -> Detay sayfası taranıyor: ${detailUrl}`);
+                        try {
+                            const detailHtml = await fetchPage(detailUrl);
+                            const $d = cheerio.load(detailHtml);
+                            
+                            $d(market.scraper_page_image).each((j, imgEl) => {
+                                let imgUrl = $d(imgEl).attr('src') || $d(imgEl).attr('data-src') || $d(imgEl).attr('data-original') || '';
+                                if (imgUrl && !pageImages.includes(imgUrl)) {
+                                    if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
+                                    if (!imgUrl.startsWith('http')) imgUrl = new URL(imgUrl, origin).toString();
+                                    pageImages.push(imgUrl);
+                                }
+                            });
+                        } catch (err) {
+                            console.warn(`  ⚠️ Detay sayfası yüklenemedi:`, err.message);
+                        }
                     }
                 }
                 

@@ -326,6 +326,48 @@ try {
     }
 }
 
+// Ensure and configure scraper markets
+try {
+    $ensure_market = function($pdo, $name, $slug, $logo, $desc, $cat_id) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM markets WHERE slug = ?");
+        $stmt->execute([$slug]);
+        if ($stmt->fetchColumn() == 0) {
+            $insert = $pdo->prepare("INSERT INTO markets (name, slug, logo, description, category_id) VALUES (?, ?, ?, ?, ?)");
+            $insert->execute([$name, $slug, $logo, $desc, $cat_id]);
+        }
+    };
+
+    $ensure_market($pdo, 'Metro', 'metro', 'metro.png', 'Metro İndirim ve Fırsatları', 1);
+    $ensure_market($pdo, 'Tarım Kredi Market', 'tarim-kredi-market', 'tarim-kredi-market.png', 'Tarım Kredi Market İndirim ve Fırsatları', 1);
+
+    $scrapers = [
+        'migros' => 'https://aktuelbrosurler.com/migros/brosurler',
+        'carrefoursa' => 'https://aktuelbrosurler.com/carrefour/brosurler',
+        'tarim-kredi-market' => 'https://aktuelbrosurler.com/tarim-kredi-kooperatif_market/brosurler',
+        'metro' => 'https://aktuelbrosurler.com/metrotoptancimarket/brosurler',
+        'ozdilek' => 'https://aktuelbrosurler.com/ozdilek/brosurler',
+        'file' => 'https://aktuelbrosurler.com/file-market/brosurler',
+        'bizim-toptan-satis-magazalari' => 'https://aktuelbrosurler.com/bizimtoptanmarket/brosurler'
+    ];
+
+    $update_stmt = $pdo->prepare("UPDATE markets SET 
+        scraper_url = ?, 
+        scraper_container = 'a.brosur-link', 
+        scraper_title = '.excerpt p', 
+        scraper_cover = '.media-wrapper', 
+        scraper_detail_link = '', 
+        scraper_page_image = '', 
+        scraper_active = 1 
+        WHERE slug = ?");
+
+    foreach ($scrapers as $slug => $url) {
+        $update_stmt->execute([$url, $slug]);
+    }
+} catch (PDOException $e) {
+    // Fail silently
+}
+
+
 // Auto cleanup function: removes brochures expired for more than 30 days along with their files
 function cleanup_expired_brochures($pdo) {
     $one_month_ago = date('Y-m-d', strtotime('-30 days'));
