@@ -71,6 +71,7 @@ $brochures = $stmt->fetchAll();
 // Fetch Categories & Markets for filters
 $categories = $pdo->query("SELECT * FROM categories ORDER BY id ASC")->fetchAll();
 $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
+$popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER BY name ASC")->fetchAll();
 
 ?>
 <!DOCTYPE html>
@@ -273,7 +274,7 @@ $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
             </div>
             
             <div class="flex gap-4 overflow-x-auto no-scrollbar pb-3">
-                <?php foreach ($markets as $m): ?>
+                <?php foreach ($popular_markets as $m): ?>
                     <a href="market.php?slug=<?= htmlspecialchars($m['slug']) ?>" 
                        class="flex flex-col items-center gap-2 shrink-0 group">
                         <div class="w-16 h-16 rounded-full border border-slate-200 bg-white flex items-center justify-center p-1 shadow-sm transition-all group-hover:scale-110 group-hover:border-red-600/50">

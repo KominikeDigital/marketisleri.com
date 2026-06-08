@@ -286,6 +286,18 @@ try {
     }
 }
 
+// Database Migrations for Popular Markets feature
+try {
+    $pdo->query("SELECT is_popular FROM markets LIMIT 1");
+} catch (PDOException $e) {
+    try {
+        $pdo->exec("ALTER TABLE markets ADD COLUMN is_popular INT DEFAULT 0");
+        $pdo->exec("UPDATE markets SET is_popular = 1 WHERE slug IN ('bim', 'a101', 'sok', 'teknosa')");
+    } catch (PDOException $ex) {
+        // Fail silently
+    }
+}
+
 // Auto cleanup function: removes brochures expired for more than 30 days along with their files
 function cleanup_expired_brochures($pdo) {
     $one_month_ago = date('Y-m-d', strtotime('-30 days'));

@@ -17,6 +17,7 @@ if (isset($_POST['save'])) {
     $slug = trim($_POST['slug'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $category_id = intval($_POST['category_id'] ?? 0);
+    $is_popular = isset($_POST['is_popular']) ? 1 : 0;
     
     // Scraper settings
     $scraper_url = trim($_POST['scraper_url'] ?? '');
@@ -72,8 +73,8 @@ if (isset($_POST['save'])) {
                 
                 // Add new market
                 try {
-                    $stmt = $pdo->prepare("INSERT INTO markets (name, slug, logo, description, category_id, scraper_url, scraper_container, scraper_title, scraper_cover, scraper_detail_link, scraper_page_image, scraper_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                    $stmt->execute([$name, $slug, $logo_name, $description, $category_id, $scraper_url, $scraper_container, $scraper_title, $scraper_cover, $scraper_detail_link, $scraper_page_image, $scraper_active]);
+                    $stmt = $pdo->prepare("INSERT INTO markets (name, slug, logo, description, category_id, scraper_url, scraper_container, scraper_title, scraper_cover, scraper_detail_link, scraper_page_image, scraper_active, is_popular) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->execute([$name, $slug, $logo_name, $description, $category_id, $scraper_url, $scraper_container, $scraper_title, $scraper_cover, $scraper_detail_link, $scraper_page_image, $scraper_active, $is_popular]);
                     $success = "Market başarıyla eklendi.";
                 } catch (PDOException $e) {
                     $error = "Kaydetme hatası: " . $e->getMessage();
@@ -88,8 +89,8 @@ if (isset($_POST['save'])) {
                 
                 // Edit existing market
                 try {
-                    $stmt = $pdo->prepare("UPDATE markets SET name = ?, slug = ?, logo = ?, description = ?, category_id = ?, scraper_url = ?, scraper_container = ?, scraper_title = ?, scraper_cover = ?, scraper_detail_link = ?, scraper_page_image = ?, scraper_active = ? WHERE id = ?");
-                    $stmt->execute([$name, $slug, $logo_name, $description, $category_id, $scraper_url, $scraper_container, $scraper_title, $scraper_cover, $scraper_detail_link, $scraper_page_image, $scraper_active, $id]);
+                    $stmt = $pdo->prepare("UPDATE markets SET name = ?, slug = ?, logo = ?, description = ?, category_id = ?, scraper_url = ?, scraper_container = ?, scraper_title = ?, scraper_cover = ?, scraper_detail_link = ?, scraper_page_image = ?, scraper_active = ?, is_popular = ? WHERE id = ?");
+                    $stmt->execute([$name, $slug, $logo_name, $description, $category_id, $scraper_url, $scraper_container, $scraper_title, $scraper_cover, $scraper_detail_link, $scraper_page_image, $scraper_active, $is_popular, $id]);
                     $success = "Market başarıyla güncellendi.";
                 } catch (PDOException $e) {
                     $error = "Güncelleme hatası: " . $e->getMessage();
@@ -216,6 +217,7 @@ $markets = $markets_stmt->fetchAll();
                                     <th class="p-4">Market Adı</th>
                                     <th class="p-4">Slug</th>
                                     <th class="p-4">Kategori</th>
+                                    <th class="p-4">Popüler</th>
                                     <th class="p-4">Açıklama</th>
                                     <th class="p-4 pr-6 text-right">İşlemler</th>
                                 </tr>
@@ -240,6 +242,15 @@ $markets = $markets_stmt->fetchAll();
                                             <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700">
                                                 <?= htmlspecialchars($m['category_name'] ?? 'Kategorisiz') ?>
                                             </span>
+                                        </td>
+                                        <td class="p-4">
+                                            <?php if ($m['is_popular'] == 1): ?>
+                                                <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-red-500/10 text-red-400 border border-red-500/20 flex items-center gap-1 w-max">
+                                                    <span class="material-symbols-outlined text-xs font-black">grade</span> Evet
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-800 text-slate-400 border border-slate-700 w-max">Hayır</span>
+                                            <?php endif; ?>
                                         </td>
                                         <td class="p-4 text-slate-400 max-w-xs truncate" title="<?= htmlspecialchars($m['description'] ?? '') ?>">
                                             <?= htmlspecialchars($m['description'] ?? '-') ?>
@@ -329,6 +340,12 @@ $markets = $markets_stmt->fetchAll();
                     <textarea id="form-description" name="description" rows="2"
                               class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
                               placeholder="Market hakkında kısa tanıtım metni..."></textarea>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="form-is-popular" name="is_popular" value="1"
+                           class="w-4 h-4 rounded bg-slate-950 border border-slate-800 text-red-600 focus:ring-red-500 focus:ring-offset-slate-900">
+                    <label for="form-is-popular" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Popüler Market (Anasayfa Popüler Listesinde Göster)</label>
                 </div>
 
                 <div class="border-t border-slate-800 pt-4 space-y-4">
@@ -440,6 +457,8 @@ $markets = $markets_stmt->fetchAll();
             formScraperDetailLink.value = "";
             formScraperPageImage.value = "";
             
+            document.getElementById('form-is-popular').checked = false;
+            
             logoPreviewImg.src = "";
             logoPreviewImg.classList.add('hidden');
             logoPreviewPlaceholder.classList.remove('hidden');
@@ -468,6 +487,8 @@ $markets = $markets_stmt->fetchAll();
             formScraperCover.value = market.scraper_cover || "";
             formScraperDetailLink.value = market.scraper_detail_link || "";
             formScraperPageImage.value = market.scraper_page_image || "";
+            
+            document.getElementById('form-is-popular').checked = market.is_popular == 1;
             
             if (market.logo) {
                 logoPreviewImg.src = "../uploads/markets/" + market.logo;
