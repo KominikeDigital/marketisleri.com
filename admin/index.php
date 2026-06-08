@@ -236,6 +236,13 @@ $recent_brochures = $recent_stmt->fetchAll();
                                 </span>
                                 <span class="material-symbols-outlined text-sm text-slate-500">chevron_right</span>
                             </a>
+                            <a href="run_scraper.php" target="_blank" class="flex items-center justify-between p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition">
+                                <span class="flex items-center gap-3">
+                                    <span class="material-symbols-outlined text-amber-400">sync</span>
+                                    <span class="font-semibold text-sm">Otomatik Tarayıcıyı Çalıştır (Scraper)</span>
+                                </span>
+                                <span class="material-symbols-outlined text-sm text-slate-500">chevron_right</span>
+                            </a>
                         </div>
                     </div>
                     
