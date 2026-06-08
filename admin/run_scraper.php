@@ -57,13 +57,38 @@ $possible_paths = [
     'node',
     '/usr/local/bin/node',
     '/usr/bin/node',
-    '/opt/alt/alt-nodejs20/root/usr/bin/node',
-    '/opt/alt/alt-nodejs18/root/usr/bin/node',
-    '/opt/alt/alt-nodejs16/root/usr/bin/node',
 ];
 
+// 1. EasyApache Node.js paths
+$ea_paths = glob('/opt/cpanel/ea-nodejs*/bin/node');
+if ($ea_paths) {
+    $possible_paths = array_merge($possible_paths, $ea_paths);
+}
+
+// 2. CloudLinux alt-nodejs paths
+$alt_paths = glob('/opt/alt/alt-nodejs*/root/usr/bin/node');
+if ($alt_paths) {
+    $possible_paths = array_merge($possible_paths, $alt_paths);
+}
+
+// 3. CloudLinux virtual environment (nodevenv) paths
+$doc_root = $_SERVER['DOCUMENT_ROOT'] ?? '';
+if ($doc_root) {
+    $home_dir = dirname($doc_root); // e.g. /home/marketis
+    if (is_dir($home_dir . '/nodevenv')) {
+        $venv_nodes = glob($home_dir . '/nodevenv/*/*/bin/node');
+        if ($venv_nodes) {
+            $possible_paths = array_merge($possible_paths, $venv_nodes);
+        }
+        $venv_nodes_alt = glob($home_dir . '/nodevenv/*/*/*/bin/node');
+        if ($venv_nodes_alt) {
+            $possible_paths = array_merge($possible_paths, $venv_nodes_alt);
+        }
+    }
+}
+
 $node_found = false;
-foreach ($possible_paths as $path) {
+foreach (array_unique($possible_paths) as $path) {
     $version_out = [];
     $ret = -1;
     @exec("$path -v 2>&1", $version_out, $ret);
@@ -78,6 +103,10 @@ foreach ($possible_paths as $path) {
 if (!$node_found) {
     echo "<span class='error'>Hata: Sunucuda Node.js komutu çalıştırılamadı! PHP exec yetkisi kapalı olabilir veya Node.js kurulu değildir.</span>\n";
     echo "Eğer Node.js özel bir dizindeyse, lütfen admin/run_scraper.php dosyasındaki \$possible_paths dizisine ekleyin.\n";
+    echo "Denenen yollar:\n";
+    foreach (array_unique($possible_paths) as $path) {
+        echo " - $path\n";
+    }
     exit;
 }
 
