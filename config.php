@@ -8,14 +8,30 @@ $admin_pass = "161224";
 
 date_default_timezone_set('Europe/Istanbul');
 
-// cPanel / public_html/marketisleri.com defaults. Leave these placeholders as-is to use the bundled SQLite database.
-// For cPanel MySQL, either edit these variables or create config.local.php from config.local.example.php.
-$db_driver = 'auto'; // auto, sqlite, mysql
-$db_host = 'localhost';
-$db_name = 'marketis_market';
-$db_user = 'marketis_market';
-$db_pass = 'CkWN1Opjn(*N2o0;';
-$db_path = __DIR__ . '/database.db';
+// Environment detection
+$is_local = true;
+if (isset($_SERVER['HTTP_HOST'])) {
+    $host = strtolower($_SERVER['HTTP_HOST']);
+    $is_local = strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false;
+}
+
+if ($is_local) {
+    // Local development settings (SQLite)
+    $db_driver = 'sqlite';
+    $db_host = 'localhost';
+    $db_name = 'VERITABANI_ADINIZ';
+    $db_user = 'VERITABANI_KULLANICINIZ';
+    $db_pass = 'VERITABANI_SIFRENIZ';
+    $db_path = __DIR__ . '/database.db';
+} else {
+    // cPanel Production settings (MySQL)
+    $db_driver = 'mysql';
+    $db_host = 'localhost';
+    $db_name = 'marketis_market';
+    $db_user = 'marketis_market';
+    $db_pass = 'CkWN1Opjn(*N2o0;';
+    $db_path = __DIR__ . '/database.db';
+}
 
 $local_config = __DIR__ . '/config.local.php';
 if (is_file($local_config)) {
@@ -43,13 +59,6 @@ $db_name = config_value('DB_NAME', 'DB_NAME', $db_name);
 $db_user = config_value('DB_USER', 'DB_USER', $db_user);
 $db_pass = config_value('DB_PASS', 'DB_PASS', $db_pass);
 $db_path = config_value('DB_PATH', 'DB_PATH', $db_path);
-
-// Environment detection
-$is_local = true;
-if (isset($_SERVER['HTTP_HOST'])) {
-    $host = strtolower($_SERVER['HTTP_HOST']);
-    $is_local = strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false;
-}
 
 function current_site_url() {
     $configured_site_url = config_value('SITE_URL', 'SITE_URL', '');
