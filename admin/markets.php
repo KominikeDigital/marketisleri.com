@@ -159,6 +159,10 @@ $markets = $markets_stmt->fetchAll();
                 <span class="material-symbols-outlined text-lg">schedule</span>
                 Otomasyon &amp; Cron
             </a>
+            <a href="apply_scrapers.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">build</span>
+                Scraper Ayarları
+            </a>
             <a href="subscribers.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
                 <span class="material-symbols-outlined text-lg">mail</span>
                 Aboneler
