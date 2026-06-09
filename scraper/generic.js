@@ -301,12 +301,15 @@ async function scrapeGenericActiveMarkets() {
                 
                 // Get Cover Image URL
                 let coverUrl = getElementValue($, card, market.scraper_cover);
+                let coverFromLogo = false; // Flag: kapak, market logosundan mı geliyor?
                 if (!coverUrl) {
-                    console.warn(`  -> Atlanıyor: Kapak resmi bulunamadı.`);
-                    continue;
+                    console.warn(`  -> Kapak resmi bulunamadı, alternatif kaynak aranıyor...`);
+                    // Fallback: kapak URL'si yoksa detay sayfasından veya logodan kullanılacak
+                    // coverUrl boş kalacak; aşağıda pageImages çekildikten sonra tekrar kontrol edilecek
+                } else {
+                    if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
+                    if (!coverUrl.startsWith('http')) coverUrl = new URL(coverUrl, origin).toString();
                 }
-                if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
-                if (!coverUrl.startsWith('http')) coverUrl = new URL(coverUrl, origin).toString();
                 
                 // Get Details Link URL (optional, if none is provided we just use cover as the only page)
                 let detailUrl = '';
@@ -392,28 +395,53 @@ async function scrapeGenericActiveMarkets() {
                 }
                 
                 // Fallback: if no pages found, use the cover image as page 1
-                if (pageImages.length === 0) {
+                if (pageImages.length === 0 && coverUrl) {
                     pageImages.push(coverUrl);
                 }
-                
+
+                // Fallback 1: Kapak URL'si yoksa ilk sayfa resmini kapak olarak kullan
+                if (!coverUrl && pageImages.length > 0) {
+                    coverUrl = pageImages[0];
+                    console.log(`  -> Kapak URL'si yok, ilk sayfa resmi kapak olarak kullanılacak: ${coverUrl}`);
+                }
+
                 // 2. Download cover using proper headers
                 const coverName = `${market.slug}_gen_${i}_cover_${timestamp}.jpg`;
                 const coverDest = path.join(uploadsDir, 'brochures', coverName);
-                
+
                 try {
-                    let coverHeaders = {};
-                    if (coverUrl.includes('brosur.ashx')) {
-                        const refererUrl = iframeUrl || detailUrl || origin;
-                        coverHeaders = {
-                            'Cookie': cardCookies,
-                            'Referer': refererUrl,
-                            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-                            'sec-fetch-site': 'same-origin',
-                            'sec-fetch-dest': 'image',
-                            'sec-fetch-mode': 'no-cors'
-                        };
+                    if (coverUrl) {
+                        // Normal URL'den indir
+                        let coverHeaders = {};
+                        if (coverUrl.includes('brosur.ashx')) {
+                            const refererUrl = iframeUrl || detailUrl || origin;
+                            coverHeaders = {
+                                'Cookie': cardCookies,
+                                'Referer': refererUrl,
+                                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                                'sec-fetch-site': 'same-origin',
+                                'sec-fetch-dest': 'image',
+                                'sec-fetch-mode': 'no-cors'
+                            };
+                        }
+                        await downloadFile(coverUrl, coverDest, coverHeaders);
+                    } else if (market.logo) {
+                        // Fallback 2: Market logosunu kapak olarak kopyala
+                        const logoSrc = path.join(__dirname, '../uploads/markets', market.logo);
+                        if (fs.existsSync(logoSrc)) {
+                            const coverDir = path.join(uploadsDir, 'brochures');
+                            if (!fs.existsSync(coverDir)) fs.mkdirSync(coverDir, { recursive: true });
+                            fs.copyFileSync(logoSrc, coverDest);
+                            coverFromLogo = true;
+                            console.log(`  -> Market logosu kapak olarak kullanıldı: ${market.logo}`);
+                        } else {
+                            console.warn(`  -> Market logosu bulunamadı (${logoSrc}), broşür atlanıyor.`);
+                            continue;
+                        }
+                    } else {
+                        console.warn(`  -> Kapak resmi ve market logosu yok, broşür atlanıyor.`);
+                        continue;
                     }
-                    await downloadFile(coverUrl, coverDest, coverHeaders);
                 } catch (err) {
                     console.error(`  ❌ Kapak indirilemedi (${coverUrl}):`, err.message);
                     continue;
