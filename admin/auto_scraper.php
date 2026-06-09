@@ -69,9 +69,24 @@ function curl_get(string $url, array $extra_headers = [], int $timeout = 20): st
 }
 
 // ─── Image download helper ───────────────────────────────────────────────────
-function download_image(string $url, string $dest, array $extra_headers = []): bool {
+function download_image(string $url, string $dest, array $extra_headers = [], string $referer = ''): bool {
     $dir = dirname($dest);
     if (!is_dir($dir)) mkdir($dir, 0755, true);
+
+    // brosur.ashx URLs require Referer + specific headers to avoid 500
+    $default_headers = [
+        'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language: tr-TR,tr;q=0.9,en;q=0.7',
+    ];
+    if ($referer) {
+        $default_headers[] = 'Referer: ' . $referer;
+    }
+    if (str_contains($url, 'brosur.ashx')) {
+        $default_headers[] = 'Sec-Fetch-Dest: image';
+        $default_headers[] = 'Sec-Fetch-Mode: no-cors';
+        $default_headers[] = 'Sec-Fetch-Site: same-origin';
+    }
 
     $ch = curl_init($url);
     $fp = fopen($dest, 'wb');
@@ -81,14 +96,10 @@ function download_image(string $url, string $dest, array $extra_headers = []): b
         CURLOPT_MAXREDIRS      => 5,
         CURLOPT_TIMEOUT        => 30,
         CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_HTTPHEADER     => array_merge([
-            'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-            'Accept: image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-        ], $extra_headers),
+        CURLOPT_HTTPHEADER     => array_merge($default_headers, $extra_headers),
     ]);
     $ok = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
     fclose($fp);
 
     if (!$ok || $code !== 200 || filesize($dest) < 500) {
@@ -321,9 +332,20 @@ function run_scraper(PDO $pdo): array {
                     continue;
                 }
                 log_line("    -> Market logosu kapak olarak kopyalandı.");
-            } elseif (!download_image($cover_url, $cover_dest)) {
-                log_line("    ❌ Kapak indirilemedi: {$cover_url}");
-                continue;
+            } elseif (!download_image($cover_url, $cover_dest, [], $detail_url ?: $url)) {
+                log_line("    ❌ Kapak indirilemedi (HTTP 500 olabilir): {$cover_url}");
+                // Try downloading first page from detail as cover instead
+                if ($detail_url) {
+                    $detail_pages = fetch_aktuelbrosurler_pages($detail_url);
+                    if (!empty($detail_pages) && download_image($detail_pages[0], $cover_dest, [], $detail_url)) {
+                        log_line("    -> Detay sayfasından kapak indirildi.");
+                        $cover_url = $detail_pages[0];
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
             }
 
             // ── Insert brochure record ────────────────────────────────────────
