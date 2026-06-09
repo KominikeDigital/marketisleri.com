@@ -100,6 +100,7 @@ function download_image(string $url, string $dest, array $extra_headers = [], st
     ]);
     $ok = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
     fclose($fp);
 
     if (!$ok || $code !== 200 || filesize($dest) < 500) {
@@ -322,6 +323,8 @@ function run_scraper(PDO $pdo): array {
             // ── Download cover image ─────────────────────────────────────────
             $cover_name = $slug . '_auto_' . $ci . '_cover_' . $ts . '.jpg';
             $cover_dest = $uploads_dir . '/brochures/' . $cover_name;
+
+            $detail_url = $detail_url ?? '';
 
             if ($cover_from_logo) {
                 // Copy market logo as cover
