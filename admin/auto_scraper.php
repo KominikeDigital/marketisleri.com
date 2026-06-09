@@ -246,18 +246,57 @@ function run_scraper(PDO $pdo): array {
             $end_date   = $dates['end'];
 
             // Extract cover image
+            // aktuelbrosurler.com uses data-img attribute on .media-wrapper div (not <img>!)
             $cover_url = '';
-            if (preg_match('/<img[^>]+(?:data-src|src)=["\']([^"\']+)["\'][^>]*>/si', $card_html, $im)) {
+            // 1st priority: data-img on the media-wrapper div
+            if (preg_match('/class=["\'][^"\']*media-wrapper[^"\']*["\'][^>]+data-img=["\']([^"\']+)["\']/', $card_html, $im)) {
+                $cover_url = trim($im[1]);
+            } elseif (preg_match('/data-img=["\']([^"\']+)["\']/', $card_html, $im)) {
                 $cover_url = trim($im[1]);
             }
-            if (!$cover_url) {
-                log_line("    ⚠️  [{$ci}] Kapak resmi yok, atlanıyor.");
-                continue;
+            // 2nd priority: data-src on any img
+            if (!$cover_url && preg_match('/<img[^>]+data-src=["\']([^"\']+)["\'][^>]*>/si', $card_html, $im)) {
+                $cover_url = trim($im[1]);
+            }
+            // 3rd priority: src on any img (skip data: URIs and tiny placeholders)
+            if (!$cover_url && preg_match('/<img[^>]+src=["\']([^"\']+)["\'][^>]*>/si', $card_html, $im)) {
+                $src = trim($im[1]);
+                if (!empty($src) && !str_starts_with($src, 'data:') && strlen($src) > 10) {
+                    $cover_url = $src;
+                }
             }
 
             // Resolve URLs
-            $cover_url = resolve_url($cover_url, $url);
+            $cover_url  = $cover_url ? resolve_url($cover_url, $url) : '';
             $detail_url = $card_href ? resolve_url($card_href, $url) : '';
+
+            // Fallback: if still no cover, try to get first page from detail page
+            $cover_from_logo = false;
+            if (!$cover_url && $detail_url) {
+                log_line("    ⚠️  [{$ci}] Kapak resmi yok, detay sayfasından deneniyor: {$detail_url}");
+                $detail_pages = fetch_aktuelbrosurler_pages($detail_url);
+                if (!empty($detail_pages)) {
+                    $cover_url = resolve_url($detail_pages[0], $url);
+                    log_line("    -> Detay sayfasından kapak alındı: {$cover_url}");
+                }
+            }
+
+            // Fallback: use market logo as cover
+            if (!$cover_url) {
+                if (!empty($market['logo'])) {
+                    $logo_src = dirname(__DIR__) . '/uploads/markets/' . $market['logo'];
+                    if (file_exists($logo_src)) {
+                        $cover_from_logo = true;
+                        log_line("    ⚠️  [{$ci}] Kapak resmi yok, market logosu kullanılacak.");
+                    } else {
+                        log_line("    ⚠️  [{$ci}] Kapak resmi ve logo dosyası yok, atlanıyor.");
+                        continue;
+                    }
+                } else {
+                    log_line("    ⚠️  [{$ci}] Kapak resmi yok ve market logosu tanımlı değil, atlanıyor.");
+                    continue;
+                }
+            }
 
             // Check for duplicate in DB
             $exist = $pdo->prepare("SELECT id FROM brochures WHERE market_id = ? AND title = ? AND start_date = ?");
@@ -273,7 +312,16 @@ function run_scraper(PDO $pdo): array {
             $cover_name = $slug . '_auto_' . $ci . '_cover_' . $ts . '.jpg';
             $cover_dest = $uploads_dir . '/brochures/' . $cover_name;
 
-            if (!download_image($cover_url, $cover_dest)) {
+            if ($cover_from_logo) {
+                // Copy market logo as cover
+                $logo_src = dirname(__DIR__) . '/uploads/markets/' . $market['logo'];
+                if (!is_dir($uploads_dir . '/brochures')) mkdir($uploads_dir . '/brochures', 0755, true);
+                if (!copy($logo_src, $cover_dest)) {
+                    log_line("    ❌ Logo kopyalanamadı: {$logo_src}");
+                    continue;
+                }
+                log_line("    -> Market logosu kapak olarak kopyalandı.");
+            } elseif (!download_image($cover_url, $cover_dest)) {
                 log_line("    ❌ Kapak indirilemedi: {$cover_url}");
                 continue;
             }
