@@ -153,6 +153,33 @@ function initialize_database($pdo, $driver) {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 email VARCHAR(255) UNIQUE NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            "CREATE TABLE IF NOT EXISTS brochure_products (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                brochure_id INT NOT NULL,
+                page_number INT NOT NULL DEFAULT 1,
+                product_name VARCHAR(500) NOT NULL,
+                price DECIMAL(10,2) DEFAULT NULL,
+                original_price DECIMAL(10,2) DEFAULT NULL,
+                unit VARCHAR(100) DEFAULT NULL,
+                x_pct FLOAT DEFAULT NULL,
+                y_pct FLOAT DEFAULT NULL,
+                w_pct FLOAT DEFAULT NULL,
+                h_pct FLOAT DEFAULT NULL,
+                analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_products_brochure FOREIGN KEY (brochure_id) REFERENCES brochures(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            "CREATE TABLE IF NOT EXISTS price_alerts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                email VARCHAR(255) NOT NULL,
+                product_name VARCHAR(500) NOT NULL,
+                target_price DECIMAL(10,2) DEFAULT NULL,
+                last_notified_price DECIMAL(10,2) DEFAULT NULL,
+                market_id INT DEFAULT NULL,
+                is_active TINYINT DEFAULT 1,
+                token VARCHAR(64) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                notified_at TIMESTAMP NULL DEFAULT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         ];
     } else {
@@ -197,6 +224,33 @@ function initialize_database($pdo, $driver) {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT NOT NULL UNIQUE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )",
+            "CREATE TABLE IF NOT EXISTS brochure_products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                brochure_id INTEGER NOT NULL,
+                page_number INTEGER NOT NULL DEFAULT 1,
+                product_name TEXT NOT NULL,
+                price REAL DEFAULT NULL,
+                original_price REAL DEFAULT NULL,
+                unit TEXT DEFAULT NULL,
+                x_pct REAL DEFAULT NULL,
+                y_pct REAL DEFAULT NULL,
+                w_pct REAL DEFAULT NULL,
+                h_pct REAL DEFAULT NULL,
+                analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (brochure_id) REFERENCES brochures(id) ON DELETE CASCADE
+            )",
+            "CREATE TABLE IF NOT EXISTS price_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                product_name TEXT NOT NULL,
+                target_price REAL DEFAULT NULL,
+                last_notified_price REAL DEFAULT NULL,
+                market_id INTEGER DEFAULT NULL,
+                is_active INTEGER DEFAULT 1,
+                token TEXT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                notified_at TIMESTAMP DEFAULT NULL
             )"
         ];
     }
@@ -243,7 +297,8 @@ function initialize_database($pdo, $driver) {
             ('smtp_pass', ''),
             ('smtp_secure', ''),
             ('smtp_from_email', ''),
-            ('smtp_from_name', '')
+            ('smtp_from_name', ''),
+            ('gemini_api_key', '')
         ");
     }
 }

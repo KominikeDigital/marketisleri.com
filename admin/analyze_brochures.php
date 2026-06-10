@@ -1,0 +1,304 @@
+<?php
+/**
+ * admin/analyze_brochures.php
+ * Broşür sayfalarını Gemini Vision API ile analiz etmek için admin paneli.
+ */
+session_start();
+require dirname(__DIR__) . '/config.php';
+
+// Auth check
+if (!isset($_SESSION['admin_logged_in'])) {
+    header('Location: login.php'); exit;
+}
+
+// Save Gemini API key
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_key') {
+    $key = trim((string)($_POST['gemini_api_key'] ?? ''));
+    $stmt = $pdo->prepare("INSERT INTO settings (key_name, value_text) VALUES ('gemini_api_key', ?)
+                            ON DUPLICATE KEY UPDATE value_text = ?");
+    try { $stmt->execute([$key, $key]); }
+    catch (PDOException $e) {
+        // SQLite fallback
+        $pdo->prepare("INSERT OR REPLACE INTO settings (key_name, value_text) VALUES ('gemini_api_key', ?)")
+            ->execute([$key]);
+    }
+    $_SESSION['flash'] = 'Gemini API anahtarı kaydedildi.';
+    header('Location: analyze_brochures.php'); exit;
+}
+
+// Fetch current key
+$key_stmt = $pdo->query("SELECT value_text FROM settings WHERE key_name = 'gemini_api_key'");
+$current_key = $key_stmt ? ($key_stmt->fetchColumn() ?: '') : '';
+
+// Fetch stats
+$total_pages     = (int)$pdo->query("SELECT COUNT(*) FROM brochure_pages")->fetchColumn();
+$analyzed_pages  = (int)$pdo->query("SELECT COUNT(DISTINCT CONCAT(brochure_id,'-',page_number)) FROM brochure_products")->fetchColumn();
+$total_products  = (int)$pdo->query("SELECT COUNT(*) FROM brochure_products")->fetchColumn();
+$total_alerts    = (int)$pdo->query("SELECT COUNT(*) FROM price_alerts WHERE is_active = 1")->fetchColumn();
+
+// Fetch brochures with page count and analysis status
+$brochures_stmt = $pdo->query("
+    SELECT b.id, b.title, b.start_date, b.end_date,
+           m.name AS market_name, m.logo AS market_logo,
+           COUNT(DISTINCT bp.id) AS page_count,
+           COUNT(DISTINCT CASE WHEN pr.id IS NOT NULL THEN bp.id END) AS analyzed_count
+    FROM brochures b
+    JOIN markets m ON m.id = b.market_id
+    LEFT JOIN brochure_pages bp ON bp.brochure_id = b.id
+    LEFT JOIN brochure_products pr ON pr.brochure_id = b.id AND pr.page_number = bp.page_number
+    WHERE b.end_date >= CURDATE()
+    GROUP BY b.id, b.title, b.start_date, b.end_date, m.name, m.logo
+    ORDER BY b.created_at DESC
+    LIMIT 100
+");
+$brochures = $brochures_stmt ? $brochures_stmt->fetchAll() : [];
+?>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Broşür Analizi — Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link rel="stylesheet" href="../uploads/tailwind.min.css">
+    <style>
+        body { font-family: 'Hanken Grotesk', sans-serif; }
+        .font-title { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .progress-bar { transition: width 0.4s ease; }
+        .log-line { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
+        .log-ok  { color: #4ade80; }
+        .log-err { color: #f87171; }
+        .log-inf { color: #93c5fd; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 min-h-screen">
+
+<div class="max-w-6xl mx-auto px-4 py-8">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="font-title text-2xl font-black text-white">🔍 Broşür AI Analizi</h1>
+            <p class="text-slate-400 text-sm mt-1">Gemini Vision API ile ürün tespiti ve fiyat karşılaştırma</p>
+        </div>
+        <a href="index.php" class="text-slate-400 hover:text-white transition text-sm flex items-center gap-1">
+            <span class="material-symbols-outlined text-base">arrow_back</span> Admin Panel
+        </a>
+    </div>
+
+    <?php if (isset($_SESSION['flash'])): ?>
+        <div class="bg-emerald-900/50 border border-emerald-700 text-emerald-300 rounded-xl px-4 py-3 mb-6 text-sm">
+            ✅ <?= htmlspecialchars($_SESSION['flash']) ?>
+        </div>
+        <?php unset($_SESSION['flash']); ?>
+    <?php endif; ?>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <?php foreach ([
+            ['Toplam Sayfa', $total_pages, 'article', 'blue'],
+            ['Analiz Edilen', $analyzed_pages, 'analytics', 'emerald'],
+            ['Tespit Edilen Ürün', $total_products, 'inventory_2', 'purple'],
+            ['Aktif Alarm', $total_alerts, 'notifications_active', 'amber'],
+        ] as [$label, $val, $icon, $color]): ?>
+            <div class="bg-slate-800 rounded-2xl p-5 border border-slate-700">
+                <span class="material-symbols-outlined text-<?= $color ?>-400 text-2xl"><?= $icon ?></span>
+                <div class="text-2xl font-black text-white mt-2"><?= number_format($val) ?></div>
+                <div class="text-slate-400 text-xs mt-0.5"><?= $label ?></div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+
+    <!-- Gemini API Key -->
+    <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 mb-8">
+        <h2 class="font-title text-lg font-black text-white mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-amber-400">key</span>
+            Gemini API Anahtarı
+        </h2>
+        <?php if (!$current_key): ?>
+            <div class="bg-amber-900/30 border border-amber-700/50 text-amber-300 rounded-xl px-4 py-3 mb-4 text-sm">
+                ⚠️ API anahtarı henüz ayarlanmamış. 
+                <a href="https://aistudio.google.com/apikey" target="_blank" class="underline">Google AI Studio</a>'dan ücretsiz anahtar alın.
+            </div>
+        <?php else: ?>
+            <div class="bg-emerald-900/30 border border-emerald-700/50 text-emerald-300 rounded-xl px-4 py-3 mb-4 text-sm">
+                ✅ API anahtarı aktif: <?= str_repeat('•', 20) . substr($current_key, -6) ?>
+            </div>
+        <?php endif; ?>
+        <form method="POST" class="flex gap-3">
+            <input type="hidden" name="action" value="save_key">
+            <input type="text" name="gemini_api_key" value="<?= htmlspecialchars($current_key) ?>"
+                   placeholder="AIzaSy..."
+                   class="flex-1 bg-slate-700 border border-slate-600 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500 transition">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl transition text-sm">
+                Kaydet
+            </button>
+        </form>
+    </div>
+
+    <!-- Brochure List -->
+    <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden mb-6">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+            <h2 class="font-title text-lg font-black text-white">Aktif Broşürler</h2>
+            <?php if ($current_key): ?>
+                <button onclick="analyzeAll()" id="analyze-all-btn"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center gap-2">
+                    <span class="material-symbols-outlined text-base">auto_awesome</span>
+                    Analiz Edilmeyenleri Analiz Et
+                </button>
+            <?php endif; ?>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-750 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left">Market / Broşür</th>
+                        <th class="px-6 py-3 text-center">Sayfa</th>
+                        <th class="px-6 py-3 text-center">Analiz</th>
+                        <th class="px-6 py-3 text-center">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700/50">
+                    <?php foreach ($brochures as $b): ?>
+                        <?php
+                        $analyzed = (int)$b['analyzed_count'];
+                        $total    = (int)$b['page_count'];
+                        $pct      = $total > 0 ? round($analyzed / $total * 100) : 0;
+                        ?>
+                        <tr class="hover:bg-slate-750 transition" id="brow-<?= $b['id'] ?>">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <?php if ($b['market_logo']): ?>
+                                        <img src="../uploads/markets/<?= htmlspecialchars($b['market_logo']) ?>" class="w-8 h-8 rounded-lg object-contain bg-white p-0.5 shrink-0" alt="">
+                                    <?php endif; ?>
+                                    <div>
+                                        <div class="font-bold text-white text-sm"><?= htmlspecialchars($b['market_name']) ?></div>
+                                        <div class="text-slate-400 text-xs truncate max-w-xs"><?= htmlspecialchars($b['title']) ?></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-center text-slate-300"><?= $total ?></td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-2 justify-center">
+                                    <div class="w-24 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                        <div class="progress-bar h-full rounded-full <?= $pct == 100 ? 'bg-emerald-500' : 'bg-blue-500' ?>" 
+                                             style="width: <?= $pct ?>%"
+                                             id="prog-<?= $b['id'] ?>"></div>
+                                    </div>
+                                    <span class="text-xs text-slate-400" id="prog-txt-<?= $b['id'] ?>"><?= $analyzed ?>/<?= $total ?></span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <?php if ($current_key): ?>
+                                    <?php if ($analyzed < $total): ?>
+                                        <button onclick="analyzeBrochure(<?= $b['id'] ?>, <?= $total ?>)"
+                                                id="btn-<?= $b['id'] ?>"
+                                                class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                                            Analiz Et
+                                        </button>
+                                    <?php else: ?>
+                                        <span class="text-emerald-400 text-xs font-bold">✅ Tamamlandı</span>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <span class="text-slate-500 text-xs">API key gerekli</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Log output -->
+    <div id="log-panel" class="hidden bg-black rounded-2xl p-5 border border-slate-700 font-mono overflow-y-auto max-h-72">
+        <div class="text-slate-500 text-xs mb-2 flex items-center justify-between">
+            <span>Analiz Logu</span>
+            <button onclick="document.getElementById('log-panel').classList.add('hidden')" class="text-slate-600 hover:text-slate-400 text-xs">Kapat</button>
+        </div>
+        <div id="log-content"></div>
+    </div>
+
+</div>
+
+<script>
+const TOTAL_BROCHURES = <?= count($brochures) ?>;
+
+function log(msg, type = 'inf') {
+    const panel = document.getElementById('log-panel');
+    const content = document.getElementById('log-content');
+    panel.classList.remove('hidden');
+    const line = document.createElement('div');
+    line.className = 'log-line log-' + type;
+    line.textContent = msg;
+    content.appendChild(line);
+    content.scrollTop = content.scrollHeight;
+}
+
+async function analyzePage(brochureId, pageNum, totalPages) {
+    log(`  → Sayfa ${pageNum}/${totalPages} analiz ediliyor...`);
+    try {
+        const r = await fetch(`../api/analyze_page.php?brochure_id=${brochureId}&page_number=${pageNum}`);
+        const data = await r.json();
+        if (data.success) {
+            log(`    ✅ ${data.count} ürün tespit edildi${data.cached ? ' (önbellekten)' : ''}`, 'ok');
+            return data.count;
+        } else {
+            log(`    ❌ ${data.error}`, 'err');
+            return 0;
+        }
+    } catch(e) {
+        log(`    ❌ İstek hatası: ${e.message}`, 'err');
+        return 0;
+    }
+}
+
+async function analyzeBrochure(brochureId, totalPages) {
+    const btn     = document.getElementById(`btn-${brochureId}`);
+    const progBar = document.getElementById(`prog-${brochureId}`);
+    const progTxt = document.getElementById(`prog-txt-${brochureId}`);
+    if (btn) { btn.disabled = true; btn.textContent = 'Analiz ediliyor...'; }
+    log(`\n📋 Broşür #${brochureId} analiz başladı (${totalPages} sayfa)`, 'inf');
+
+    let done = 0;
+    for (let p = 1; p <= totalPages; p++) {
+        await analyzePage(brochureId, p, totalPages);
+        done++;
+        const pct = Math.round(done / totalPages * 100);
+        if (progBar) progBar.style.width = pct + '%';
+        if (progTxt) progTxt.textContent = `${done}/${totalPages}`;
+        // Small delay to avoid rate limiting
+        await new Promise(res => setTimeout(res, 800));
+    }
+
+    log(`✅ Broşür #${brochureId} tamamlandı!`, 'ok');
+    if (btn) { btn.textContent = '✅ Tamamlandı'; btn.className = btn.className.replace('bg-blue-600 hover:bg-blue-700', 'bg-emerald-700 cursor-default'); }
+    if (progBar) progBar.classList.replace('bg-blue-500', 'bg-emerald-500');
+}
+
+async function analyzeAll() {
+    const btn = document.getElementById('analyze-all-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span>Analiz ediliyor...</span>'; }
+
+    // Collect all brochures that aren't fully analyzed
+    const rows = document.querySelectorAll('button[id^="btn-"]');
+    for (const btn of rows) {
+        const id = btn.id.replace('btn-', '');
+        const progTxt = document.getElementById(`prog-txt-${id}`);
+        if (!progTxt) continue;
+        const [done, total] = progTxt.textContent.split('/').map(Number);
+        if (done < total) {
+            await analyzeBrochure(parseInt(id), total);
+            await new Promise(res => setTimeout(res, 1500)); // pause between brochures
+        }
+    }
+
+    if (btn) { btn.disabled = false; btn.innerHTML = '✅ Tümü Tamamlandı'; }
+}
+</script>
+</body>
+</html>

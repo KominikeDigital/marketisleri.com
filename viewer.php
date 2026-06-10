@@ -11,9 +11,8 @@ $social_settings = $site_settings; // backward compatibility
 
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
-
 // Fetch brochure metadata with market info
-$stmt = $pdo->prepare("SELECT b.*, m.name as market_name, m.logo as market_logo, m.slug as market_slug, m.description as market_desc 
+$stmt = $pdo->prepare("SELECT b.*, m.name as market_name, m.logo as market_logo, m.slug as market_slug, m.description as market_desc, m.id as market_id_val
                        FROM brochures b 
                        JOIN markets m ON b.market_id = m.id 
                        WHERE b.id = ?");
@@ -29,10 +28,22 @@ $is_pdf = !empty($brochure['pdf_path']);
 $pages = [];
 
 if (!$is_pdf) {
-    // Fetch image pages
     $pages_stmt = $pdo->prepare("SELECT * FROM brochure_pages WHERE brochure_id = ? ORDER BY page_number ASC");
     $pages_stmt->execute([$id]);
     $pages = $pages_stmt->fetchAll();
+}
+
+// Check if Gemini API key is configured
+$gemini_configured = !empty($site_settings['gemini_api_key']);
+
+// Pre-load products for first page (if analyzed)
+$first_page_products = [];
+if (!$is_pdf && !empty($pages)) {
+    $prod_stmt = $pdo->prepare(
+        "SELECT * FROM brochure_products WHERE brochure_id = ? AND page_number = 1 ORDER BY y_pct ASC, x_pct ASC"
+    );
+    $prod_stmt->execute([$id]);
+    $first_page_products = $prod_stmt->fetchAll();
 }
 ?>
 <!DOCTYPE html>
@@ -44,56 +55,218 @@ if (!$is_pdf) {
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-
       gtag('config', 'G-CEY5MRFRRL');
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- SEO Meta Tags -->
     <title><?= htmlspecialchars($brochure['market_name']) ?> - <?= htmlspecialchars($brochure['title']) ?> | Tüm Market Broşürleri Tek Yerde</title>
     <meta name="description" content="<?= htmlspecialchars($brochure['market_name']) ?> en güncel kataloğu. Geçerlilik Tarihi: <?= date('d.m.Y', strtotime($brochure['start_date'])) ?> - <?= date('d.m.Y', strtotime($brochure['end_date'])) ?>. Aktüel indirimleri kaçırmayın!">
     
-    <!-- Favicon -->
     <link rel="icon" type="image/png" href="<?= htmlspecialchars($site_url) ?>/uploads/logo.png">
-    
-    <!-- Typography & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
-    
-    <!-- Compiled Tailwind CSS -->
     <link rel="stylesheet" href="uploads/tailwind.min.css">
     
-    <!-- PDF.js CDN (Loaded only if PDF brochure) -->
     <?php if ($is_pdf): ?>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <?php endif; ?>
+
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983" crossorigin="anonymous"></script>
 
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
         .font-title { font-family: 'Plus Jakarta Sans', sans-serif; }
         
-        /* Thumbnail highlight style */
         .thumbnail-btn.active-thumb {
             border-color: #dc2626 !important;
             transform: scale(1.05);
             box-shadow: 0 4px 10px rgba(220, 38, 38, 0.15);
         }
-        
-        /* Hide scrollbars for sliders */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* ── Product Overlay ── */
+        #page-wrapper {
+            position: relative;
+            display: inline-block;
+            max-height: 75vh;
+            cursor: crosshair;
+        }
+        #mainImg {
+            max-height: 75vh;
+            max-width: 100%;
+            width: auto;
+            display: block;
+            border-radius: 1rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 12px rgba(0,0,0,.08);
+        }
+        #product-overlay {
+            position: absolute;
+            inset: 0;
+            border-radius: 1rem;
+            pointer-events: none;
+        }
+        .product-hotspot {
+            position: absolute;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            pointer-events: all;
+            transition: background .15s, border-color .15s;
+            box-sizing: border-box;
+        }
+        .product-hotspot:hover {
+            background: rgba(239,68,68,.12);
+            border-color: rgba(239,68,68,.5);
+        }
+        .product-hotspot.active {
+            background: rgba(239,68,68,.18);
+            border-color: #ef4444;
+        }
+
+        /* ── Zoom Modal ── */
+        #zoom-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 9000;
+            background: rgba(0,0,0,.55);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        #zoom-modal.open { display: flex; }
+        #zoom-box {
+            background: white;
+            border-radius: 20px;
+            padding: 0;
+            max-width: 860px;
+            width: 100%;
+            max-height: 92vh;
+            overflow-y: auto;
+            box-shadow: 0 24px 80px rgba(0,0,0,.3);
+            display: flex;
+            flex-direction: column;
+            animation: zoomIn .22s cubic-bezier(.34,1.56,.64,1);
+        }
+        @keyframes zoomIn {
+            from { opacity:0; transform: scale(.88); }
+            to   { opacity:1; transform: scale(1); }
+        }
+        #zoom-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 22px 0;
+            gap: 12px;
+        }
+        #zoom-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 18px 22px 22px;
+        }
+        @media (max-width: 600px) {
+            #zoom-content { grid-template-columns: 1fr; }
+        }
+        #zoom-canvas-wrap {
+            background: #f8fafc;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+        }
+        #zoom-canvas {
+            max-width: 100%;
+            max-height: 340px;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        /* Price comparison list */
+        .compare-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            transition: background .15s;
+        }
+        .compare-item:hover { background: #f1f5f9; }
+        .compare-item .logo-wrap {
+            width: 36px; height: 36px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            display: flex; align-items: center; justify-content: center;
+            background: white; flex-shrink: 0; overflow: hidden;
+        }
+        .compare-item .logo-wrap img { width: 100%; height: 100%; object-fit: contain; }
+        .compare-badge-cheap {
+            font-size: 10px; font-weight: 700;
+            background: #dcfce7; color: #166534;
+            padding: 2px 8px; border-radius: 999px;
+        }
+        .compare-badge-expensive {
+            font-size: 10px; font-weight: 700;
+            background: #fee2e2; color: #991b1b;
+            padding: 2px 8px; border-radius: 999px;
+        }
+
+        /* Alert form */
+        #alert-form input[type=email],
+        #alert-form input[type=number] {
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            width: 100%;
+            outline: none;
+            transition: border-color .15s;
+        }
+        #alert-form input:focus { border-color: #ef4444; }
+
+        /* Loading skeleton */
+        .skeleton { 
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s infinite;
+            border-radius: 6px;
+        }
+        @keyframes shimmer {
+            0%   { background-position: -200% 0; }
+            100% { background-position:  200% 0; }
+        }
+
+        /* Pulse indicator when analysis running */
+        .analyzing-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #fff7ed; color: #c2410c;
+            border: 1px solid #fed7aa; border-radius: 999px;
+            padding: 4px 12px; font-size: 12px; font-weight: 600;
+        }
+        .dot-pulse {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #f97316;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: .3; }
+        }
     </style>
-    
-    <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
-         crossorigin="anonymous"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
 
-    <!-- Header Navigation -->
+    <!-- Header -->
     <header class="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between">
             <a href="index.php" class="flex items-center gap-2">
@@ -106,7 +279,6 @@ if (!$is_pdf) {
                     </span>
                 <?php endif; ?>
             </a>
-            
             <nav class="flex items-center gap-6 text-sm font-bold text-slate-600">
                 <a href="index.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">home</span>Anasayfa</a>
                 <a href="marketler.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">storefront</span>Marketler</a>
@@ -114,17 +286,15 @@ if (!$is_pdf) {
         </div>
     </header>
 
-    <!-- Main Content Grid -->
     <main class="pt-8 max-w-7xl w-full mx-auto px-4 md:px-6 flex-1 pb-16">
-        <!-- Back Navigation Link -->
         <div class="mb-6">
             <a href="index.php" class="inline-flex items-center gap-1.5 text-sm font-bold text-slate-600 hover:text-red-600 transition bg-white border border-slate-200/80 px-4 py-2 rounded-xl shadow-sm">
                 <span class="material-symbols-outlined text-sm font-black">arrow_back</span>
                 Anasayfaya Geri Dön
             </a>
         </div>
-        
-        <!-- Top Adsense Placeholder Banner -->
+
+        <!-- Top Banner Ad -->
         <div class="w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider mb-6 relative overflow-hidden select-none">
             <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
             <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
@@ -133,67 +303,71 @@ if (!$is_pdf) {
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
             
-            <!-- Left Column: Brochure Page Viewer (lg:col-span-3) -->
+            <!-- Left: Viewer -->
             <div class="lg:col-span-3 space-y-6">
-                <!-- Viewer Panel -->
                 <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-md relative group flex flex-col justify-between min-h-[50vh]">
                     
-                    <!-- Main Display Container -->
+                    <!-- Analysis status badge -->
+                    <div id="analysis-badge" class="mb-3 hidden">
+                        <span class="analyzing-badge">
+                            <span class="dot-pulse"></span>
+                            <span id="analysis-badge-text">Ürünler analiz ediliyor...</span>
+                        </span>
+                    </div>
+
+                    <!-- Main display -->
                     <div class="relative flex items-center justify-center overflow-hidden flex-1 py-4">
                         
-                        <!-- Overlay Navigation Arrows (Desktop) -->
-                        <button onclick="prevPage()" 
-                                class="absolute left-2 z-10 w-12 h-12 rounded-full bg-white/95 border border-slate-100 shadow-lg flex items-center justify-center text-slate-700 hover:text-red-600 hover:scale-105 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-300">
+                        <button onclick="prevPage()" class="absolute left-2 z-10 w-12 h-12 rounded-full bg-white/95 border border-slate-100 shadow-lg flex items-center justify-center text-slate-700 hover:text-red-600 hover:scale-105 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-300">
                             <span class="material-symbols-outlined font-black">chevron_left</span>
                         </button>
-                        
-                        <button onclick="nextPage()" 
-                                class="absolute right-2 z-10 w-12 h-12 rounded-full bg-white/95 border border-slate-100 shadow-lg flex items-center justify-center text-slate-700 hover:text-red-600 hover:scale-105 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-300">
+                        <button onclick="nextPage()" class="absolute right-2 z-10 w-12 h-12 rounded-full bg-white/95 border border-slate-100 shadow-lg flex items-center justify-center text-slate-700 hover:text-red-600 hover:scale-105 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-300">
                             <span class="material-symbols-outlined font-black">chevron_right</span>
                         </button>
 
-                        <!-- Content Render Targets -->
                         <?php if ($is_pdf): ?>
-                            <!-- PDF Canvas Render Target -->
                             <canvas id="pdf-canvas" class="max-h-[75vh] max-w-full w-auto rounded-2xl shadow border border-slate-100 hidden bg-white"></canvas>
-                            <!-- PDF Loading Spinner -->
                             <div id="pdf-loading" class="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
                                 <div class="w-10 h-10 border-4 border-slate-200 border-t-red-600 rounded-full animate-spin"></div>
                                 <span class="text-sm">Broşür yükleniyor...</span>
                             </div>
                         <?php else: ?>
-                            <!-- Image Render Target -->
                             <?php if (empty($pages)): ?>
                                 <div class="py-20 text-center text-slate-400">
                                     <span class="material-symbols-outlined text-5xl mb-2">find_in_page</span>
                                     Bu broşürde hiç sayfa bulunmamaktadır.
                                 </div>
                             <?php else: ?>
-                                <img id="mainImg" src="uploads/brochures/pages/<?= htmlspecialchars($pages[0]['image_path']) ?>" 
-                                     class="max-h-[75vh] max-w-full w-auto rounded-2xl shadow border border-slate-100 object-contain" 
-                                     alt="Page 1">
+                                <!-- Page wrapper with product overlay -->
+                                <div id="page-wrapper">
+                                    <img id="mainImg" 
+                                         src="uploads/brochures/pages/<?= htmlspecialchars($pages[0]['image_path']) ?>" 
+                                         alt="Sayfa 1"
+                                         onload="onImageLoad()">
+                                    <div id="product-overlay"></div>
+                                </div>
+                                <div id="no-products-hint" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-slate-400 bg-white/80 rounded-full px-3 py-1 border border-slate-200">
+                                    Ürüne tıkla • Fiyat ve karşılaştırma gör
+                                </div>
                             <?php endif; ?>
                         <?php endif; ?>
-
                     </div>
-                    
-                    <!-- Navigation / Page Numbers Bar -->
+
+                    <!-- Navigation bar -->
                     <div class="flex items-center justify-between border-t border-slate-100 pt-6 mt-4">
                         <button onclick="prevPage()" class="inline-flex items-center gap-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold transition">
                             <span class="material-symbols-outlined text-sm font-black">chevron_left</span> Önceki
                         </button>
-                        
                         <span id="pageNo" class="font-title text-base font-black text-slate-800">
                             Sayfa 1 / <?= $is_pdf ? '...' : count($pages) ?>
                         </span>
-                        
                         <button onclick="nextPage()" class="inline-flex items-center gap-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold transition">
                             Sonraki <span class="material-symbols-outlined text-sm font-black">chevron_right</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Page Thumbnail Ribbon -->
+                <!-- Thumbnail ribbon -->
                 <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
                     <h4 class="font-title text-sm font-bold text-slate-900 mb-4 flex items-center gap-1.5">
                         <span class="material-symbols-outlined text-red-600 text-base">apps</span>
@@ -214,7 +388,7 @@ if (!$is_pdf) {
                     </div>
                 </div>
 
-                <!-- Bottom Adsense Placeholder Banner -->
+                <!-- Bottom Banner Ad -->
                 <div class="w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider relative overflow-hidden select-none">
                     <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
                     <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
@@ -222,9 +396,9 @@ if (!$is_pdf) {
                 </div>
             </div>
 
-            <!-- Right Column: Sidebar Details & Ads (lg:col-span-1) -->
+            <!-- Right: Sidebar -->
             <div class="space-y-6">
-                <!-- Market Info Box -->
+                <!-- Market info -->
                 <a href="market.php?slug=<?= htmlspecialchars($brochure['market_slug']) ?>" class="block bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition space-y-5 group">
                     <div class="flex items-center gap-3">
                         <div class="w-14 h-14 rounded-2xl border border-slate-100 p-1 flex items-center justify-center shrink-0 shadow-sm bg-white">
@@ -242,7 +416,6 @@ if (!$is_pdf) {
                             </span>
                         </div>
                     </div>
- 
                     <?php if ($brochure['market_desc']): ?>
                         <p class="text-slate-500 text-xs leading-relaxed border-t border-slate-100 pt-4">
                             <?= htmlspecialchars($brochure['market_desc']) ?>
@@ -250,12 +423,10 @@ if (!$is_pdf) {
                     <?php endif; ?>
                 </a>
 
-                <!-- Brochure Details Box -->
+                <!-- Brochure details -->
                 <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
                     <h4 class="font-title text-sm font-bold text-slate-900 border-b border-slate-100 pb-3">Katalog Bilgileri</h4>
-                    
                     <div class="space-y-3.5 text-sm">
-                        <!-- Validity dates -->
                         <div class="flex justify-between items-center text-xs text-slate-500 border-b border-slate-100/50 pb-2.5">
                             <span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">calendar_month</span> Başlangıç:</span>
                             <span class="font-bold text-slate-700"><?= date('d.m.Y', strtotime($brochure['start_date'])) ?></span>
@@ -264,51 +435,33 @@ if (!$is_pdf) {
                             <span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">calendar_month</span> Bitiş:</span>
                             <span class="font-bold text-slate-700"><?= date('d.m.Y', strtotime($brochure['end_date'])) ?></span>
                         </div>
-
-                        <!-- Status Alert Card -->
                         <div class="p-3.5 rounded-2xl text-xs font-semibold leading-relaxed mt-2 border">
                             <?php
                             if ($brochure['end_date'] < $today) {
-                                echo '<div class="bg-red-500/10 border-red-500/20 text-red-700 flex items-center gap-2">
-                                        <span class="material-symbols-outlined text-base">error</span>
-                                        <span>Bu broşürün süresi dolmuştur. Yeni kataloglara göz atabilirsiniz.</span>
-                                      </div>';
+                                echo '<div class="bg-red-500/10 border-red-500/20 text-red-700 flex items-center gap-2"><span class="material-symbols-outlined text-base">error</span><span>Bu broşürün süresi dolmuştur.</span></div>';
                             } elseif ($brochure['start_date'] > $today) {
                                 $diff = strtotime($brochure['start_date']) - strtotime($today);
-                                $days = round($diff / (60 * 60 * 24));
-                                $dayStr = ($days == 1) ? 'yarın' : $days . ' gün sonra';
-                                echo '<div class="bg-amber-500/10 border-amber-500/20 text-amber-800 flex items-center gap-2">
-                                        <span class="material-symbols-outlined text-base">schedule</span>
-                                        <span>Bu broşür henüz aktif değildir. ' . $dayStr . ' yayına girecektir.</span>
-                                      </div>';
+                                $days = round($diff / 86400);
+                                $dayStr = $days == 1 ? 'yarın' : $days . ' gün sonra';
+                                echo '<div class="bg-amber-500/10 border-amber-500/20 text-amber-800 flex items-center gap-2"><span class="material-symbols-outlined text-base">schedule</span><span>Bu broşür ' . $dayStr . ' yayına girecektir.</span></div>';
                             } else {
-                                $diff = strtotime($brochure['end_date']) - strtotime($today);
-                                $days = round($diff / (60 * 60 * 24));
-                                if ($days == 0) {
-                                    $msg = "Son gün! Bugün kampanya sona eriyor.";
-                                } elseif ($days == 1) {
-                                    $msg = "Son 1 gün! Yarın kampanya sona eriyor.";
-                                } else {
-                                    $msg = "Bu indirim broşürü aktiftir. Kalan gün: " . $days;
-                                }
-                                echo '<div class="bg-emerald-500/10 border-emerald-500/20 text-emerald-800 flex items-center gap-2">
-                                        <span class="material-symbols-outlined text-base font-black">check_circle</span>
-                                        <span>' . $msg . '</span>
-                                      </div>';
+                                $diff  = strtotime($brochure['end_date']) - strtotime($today);
+                                $days  = round($diff / 86400);
+                                $msg   = $days == 0 ? 'Son gün! Bugün sona eriyor.' : ($days == 1 ? 'Son 1 gün kaldı!' : "Aktif. Kalan: {$days} gün");
+                                echo '<div class="bg-emerald-500/10 border-emerald-500/20 text-emerald-800 flex items-center gap-2"><span class="material-symbols-outlined text-base font-black">check_circle</span><span>' . $msg . '</span></div>';
                             }
                             ?>
                         </div>
                     </div>
                 </div>
 
-                <!-- Sidebar Adsense Placeholder Card -->
+                <!-- Sidebar Ad -->
                 <div class="bg-white border border-slate-200/60 rounded-3xl p-6 text-center text-xs font-bold text-slate-400 tracking-wider shadow-sm select-none relative overflow-hidden h-60 flex flex-col justify-center items-center">
                     <div class="absolute inset-0 bg-gradient-to-b from-red-500/5 to-rose-500/5 pointer-events-none"></div>
                     <span class="material-symbols-outlined text-2xl mb-2 text-slate-400">ads_click</span>
                     GOOGLE ADSENSE REKLAM ALANI<br>(300x250 veya Esnek)
                 </div>
             </div>
-            
         </div>
     </main>
 
@@ -328,16 +481,12 @@ if (!$is_pdf) {
                 </a>
                 <p class="text-slate-400 text-xs">En güncel aktüel ürün katalogları tek adreste.</p>
             </div>
-
-            <!-- Legal Links -->
             <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-500 font-medium my-4 md:my-0">
                 <a href="marketler.php" class="hover:text-red-600 transition">Marketler</a>
                 <a href="gizlilik-politikasi.php" class="hover:text-red-600 transition">Gizlilik Politikası</a>
                 <a href="kullanim-kosullari.php" class="hover:text-red-600 transition">Kullanım Koşulları</a>
                 <a href="cerez-politikasi.php" class="hover:text-red-600 transition">Çerez Politikası</a>
             </div>
-
-            <!-- Social Media Links -->
             <?php if (!empty($social_settings['social_facebook']) || !empty($social_settings['social_instagram']) || !empty($social_settings['social_twitter']) || !empty($social_settings['social_youtube'])): ?>
                 <div class="flex gap-4 my-4 md:my-0">
                     <?php if (!empty($social_settings['social_facebook'])): ?>
@@ -362,7 +511,6 @@ if (!$is_pdf) {
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
-            
             <div class="text-slate-400 text-xs text-center md:text-right space-y-1">
                 <p>&copy; 2026 marketisleri.com All rights reserved.</p>
                 <p><a href="https://kominikee.com" target="_blank" rel="noopener" class="text-red-600 hover:text-red-500 font-semibold">Kominike "Creative" Digital Project</a></p>
@@ -370,160 +518,440 @@ if (!$is_pdf) {
         </div>
     </footer>
 
-    <!-- Hybrid Viewer JS Logic -->
+    <!-- ════════════════════════════════════════════════════════════════
+         ZOOM MODAL
+    ════════════════════════════════════════════════════════════════ -->
+    <div id="zoom-modal" role="dialog" aria-modal="true" aria-label="Ürün Detayı">
+        <div id="zoom-box">
+            <div id="zoom-header">
+                <h2 id="zoom-product-name" class="font-title text-lg font-black text-slate-900 leading-tight flex-1"></h2>
+                <button onclick="closeZoom()" class="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:text-red-600 hover:border-red-300 transition flex-shrink-0">
+                    <span class="material-symbols-outlined text-lg">close</span>
+                </button>
+            </div>
+
+            <div id="zoom-content">
+                <!-- Left: Zoomed image -->
+                <div id="zoom-canvas-wrap">
+                    <canvas id="zoom-canvas"></canvas>
+                </div>
+
+                <!-- Right: Details -->
+                <div class="flex flex-col gap-4">
+                    <!-- Price -->
+                    <div>
+                        <div id="zoom-price-wrap" class="flex items-end gap-3 flex-wrap">
+                            <span id="zoom-price" class="text-4xl font-black text-red-600 font-title"></span>
+                            <span id="zoom-orig-price" class="text-lg text-slate-400 line-through hidden"></span>
+                            <span id="zoom-unit" class="text-sm text-slate-500 mb-1"></span>
+                        </div>
+                        <div id="zoom-discount-badge" class="hidden mt-1">
+                            <span class="inline-block bg-red-100 text-red-700 font-bold text-xs px-2 py-0.5 rounded-full" id="zoom-discount-text"></span>
+                        </div>
+                    </div>
+
+                    <!-- Price Comparison -->
+                    <div>
+                        <h3 class="font-bold text-sm text-slate-700 flex items-center gap-1.5 mb-2">
+                            <span class="material-symbols-outlined text-base text-slate-500">compare_arrows</span>
+                            Diğer Marketlerde
+                        </h3>
+                        <div id="compare-list" class="space-y-2">
+                            <div class="skeleton h-10 rounded-xl"></div>
+                            <div class="skeleton h-10 rounded-xl"></div>
+                        </div>
+                        <div id="compare-empty" class="hidden text-xs text-slate-400 py-2">Diğer marketlerde bu ürün bulunamadı.</div>
+                    </div>
+
+                    <!-- Price Alert Form -->
+                    <div class="border-t border-slate-100 pt-4">
+                        <h3 class="font-bold text-sm text-slate-700 flex items-center gap-1.5 mb-3">
+                            <span class="material-symbols-outlined text-base text-amber-500">notifications</span>
+                            Fiyat Alarmı Kur
+                        </h3>
+                        <form id="alert-form" onsubmit="submitAlert(event)" class="space-y-2">
+                            <input type="hidden" id="alert-product-name" name="product_name">
+                            <input type="email" id="alert-email" name="email" 
+                                   placeholder="E-posta adresiniz" required
+                                   class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-red-400 transition">
+                            <div class="flex gap-2">
+                                <input type="number" id="alert-target-price" name="target_price" 
+                                       placeholder="Hedef fiyat (TL, opsiyonel)" step="0.01" min="0"
+                                       class="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-red-400 transition">
+                            </div>
+                            <button type="submit" id="alert-btn"
+                                    class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl py-2.5 transition flex items-center justify-center gap-2">
+                                <span class="material-symbols-outlined text-base">notifications_active</span>
+                                Alarm Kur
+                            </button>
+                            <div id="alert-msg" class="text-xs text-center hidden"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         JAVASCRIPT
+    ════════════════════════════════════════════════════════════════ -->
     <script>
-        const isPdf = <?= $is_pdf ? 'true' : 'false' ?>;
-        let currentPage = 0;
-        let totalPages = 0;
-        let pagesArray = [];
+    const BROCHURE_ID       = <?= (int)$id ?>;
+    const MARKET_ID         = <?= (int)$brochure['market_id_val'] ?>;
+    const GEMINI_CONFIGURED = <?= $gemini_configured ? 'true' : 'false' ?>;
+    const isPdf             = <?= $is_pdf ? 'true' : 'false' ?>;
+    const pagesArray        = <?= json_encode(array_column($pages, 'image_path')) ?>;
+    const totalPages        = pagesArray.length;
+    let   currentPage       = 0;
 
-        if (isPdf) {
-            // PDF.js Integration
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    // Products cache: { pageNum: [...] }
+    const productsCache     = { 1: <?= json_encode($first_page_products) ?> };
 
-            const pdfUrl = 'uploads/brochures/pdfs/<?= htmlspecialchars($brochure['pdf_path']) ?>';
-            let pdfDoc = null;
-            let pageRendering = false;
-            let pageNumPending = null;
-            const canvas = document.getElementById('pdf-canvas');
-            const ctx = canvas.getContext('2d');
-            const loader = document.getElementById('pdf-loading');
+    // ── Page navigation ──────────────────────────────────────────────
+    function prevPage() { if (currentPage > 0) goToPage(currentPage - 1); }
+    function nextPage() { if (currentPage < totalPages - 1) goToPage(currentPage + 1); }
 
-            pdfjsLib.getDocument(pdfUrl).promise.then(function(pdfDoc_) {
-                pdfDoc = pdfDoc_;
-                totalPages = pdfDoc.numPages;
-                loader.classList.add('hidden');
-                canvas.classList.remove('hidden');
-                
-                // Populate thumbnail ribbon dynamically
-                populatePdfThumbnails();
-                
-                // Render first page
-                renderPdfPage(1);
-            }).catch(function(err) {
-                console.error("PDF Yüklenemedi: ", err);
-                loader.innerHTML = '<span class="text-red-500 font-bold">PDF dosyası yüklenemedi. Lütfen tekrar deneyin.</span>';
-            });
+    function goToPage(index) {
+        if (index < 0 || index >= totalPages) return;
+        currentPage = index;
+        const mainImg = document.getElementById('mainImg');
+        if (mainImg) {
+            mainImg.onload = onImageLoad;
+            mainImg.src = 'uploads/brochures/pages/' + pagesArray[index];
+            mainImg.alt = 'Sayfa ' + (index + 1);
+        }
+        document.getElementById('pageNo').innerText = 'Sayfa ' + (index + 1) + ' / ' + totalPages;
+        highlightActiveThumbnail(index);
+        clearHotspots();
+    }
 
-            function renderPdfPage(num) {
-                pageRendering = true;
-                
-                pdfDoc.getPage(num).then(function(page) {
-                    // Set scale according to container width for sharpness and responsiveness
-                    const viewport = page.getViewport({ scale: 1.5 });
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
+    function highlightActiveThumbnail(index) {
+        document.querySelectorAll('.thumbnail-btn').forEach(btn => {
+            const isActive = parseInt(btn.dataset.pageIndex) === index;
+            btn.classList.toggle('active-thumb', isActive);
+            if (isActive) btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        });
+    }
 
-                    const renderContext = {
-                        canvasContext: ctx,
-                        viewport: viewport
-                    };
-                    const renderTask = page.render(renderContext);
+    // ── Image loaded: render hotspots ────────────────────────────────
+    function onImageLoad() {
+        const pageNum = currentPage + 1;
+        if (productsCache[pageNum] !== undefined) {
+            renderHotspots(productsCache[pageNum]);
+        } else if (GEMINI_CONFIGURED) {
+            analyzeCurrentPage();
+        }
+    }
 
-                    renderTask.promise.then(function() {
-                        pageRendering = false;
-                        if (pageNumPending !== null) {
-                            renderPdfPage(pageNumPending);
-                            pageNumPending = null;
-                        }
-                    });
-                });
+    // ── Analyze page via Gemini ──────────────────────────────────────
+    function analyzeCurrentPage() {
+        const pageNum = currentPage + 1;
+        const badge   = document.getElementById('analysis-badge');
+        const badgeText = document.getElementById('analysis-badge-text');
+        badge.classList.remove('hidden');
+        badgeText.textContent = `Sayfa ${pageNum} analiz ediliyor...`;
 
-                // Update page number elements
-                document.getElementById('pageNo').innerText = 'Sayfa ' + num + ' / ' + totalPages;
-                currentPage = num - 1;
-                
-                // Highlight active thumbnail
-                highlightActiveThumbnail(currentPage);
-            }
-
-            function queueRenderPage(num) {
-                if (pageRendering) {
-                    pageNumPending = num;
-                } else {
-                    renderPdfPage(num);
+        fetch(`api/analyze_page.php?brochure_id=${BROCHURE_ID}&page_number=${pageNum}`)
+            .then(r => r.json())
+            .then(data => {
+                badge.classList.add('hidden');
+                if (data.success) {
+                    productsCache[pageNum] = data.products;
+                    renderHotspots(data.products);
                 }
-            }
+            })
+            .catch(() => badge.classList.add('hidden'));
+    }
 
-            function populatePdfThumbnails() {
-                const ribbon = document.getElementById('thumbnail-ribbon');
-                ribbon.innerHTML = '';
-                for (let i = 1; i <= totalPages; i++) {
-                    const btn = document.createElement('button');
-                    btn.className = 'thumbnail-btn shrink-0 border-2 rounded-xl w-16 h-20 flex flex-col items-center justify-center bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 font-bold text-sm transition-all';
-                    btn.setAttribute('data-page-index', i - 1);
-                    btn.innerHTML = `<span class="text-[9px] text-slate-400 block font-normal uppercase">SAYFA</span>${i}`;
-                    btn.onclick = () => goToPage(i - 1);
-                    ribbon.appendChild(btn);
-                }
-                highlightActiveThumbnail(0);
-            }
+    // ── Render product hotspots on image ────────────────────────────
+    function clearHotspots() {
+        const overlay = document.getElementById('product-overlay');
+        if (overlay) overlay.innerHTML = '';
+    }
 
-            function prevPage() {
-                if (currentPage <= 0) return;
-                queueRenderPage(currentPage);
-            }
+    function renderHotspots(products) {
+        const overlay = document.getElementById('product-overlay');
+        const img     = document.getElementById('mainImg');
+        if (!overlay || !img) return;
+        overlay.innerHTML = '';
 
-            function nextPage() {
-                if (currentPage >= totalPages - 1) return;
-                queueRenderPage(currentPage + 2);
-            }
+        const hint = document.getElementById('no-products-hint');
+        if (!products || products.length === 0) {
+            if (hint) hint.classList.remove('hidden');
+            return;
+        }
+        if (hint) hint.classList.add('hidden');
 
-            function goToPage(index) {
-                if (index < 0 || index >= totalPages) return;
-                queueRenderPage(index + 1);
-            }
+        products.forEach((p, i) => {
+            if (p.x_pct == null) return;
+            const hs = document.createElement('div');
+            hs.className = 'product-hotspot';
+            hs.style.left   = p.x_pct + '%';
+            hs.style.top    = p.y_pct + '%';
+            hs.style.width  = p.w_pct + '%';
+            hs.style.height = p.h_pct + '%';
+            hs.title = p.product_name + (p.price ? ` — ${formatPrice(p.price)} TL` : '');
+            hs.dataset.idx  = i;
+            hs.addEventListener('click', () => openZoom(p, img));
+            overlay.appendChild(hs);
+        });
+    }
 
-            window.prevPage = prevPage;
-            window.nextPage = nextPage;
-            window.goToPage = goToPage;
+    // ── Zoom modal ───────────────────────────────────────────────────
+    function openZoom(product, img) {
+        // Deactivate all hotspots, activate clicked
+        document.querySelectorAll('.product-hotspot').forEach(h => h.classList.remove('active'));
 
+        // Render name
+        document.getElementById('zoom-product-name').textContent = product.product_name;
+        document.getElementById('alert-product-name').value = product.product_name;
+
+        // Price
+        const priceEl = document.getElementById('zoom-price');
+        const origEl  = document.getElementById('zoom-orig-price');
+        const unitEl  = document.getElementById('zoom-unit');
+        const discBadge = document.getElementById('zoom-discount-badge');
+        const discText  = document.getElementById('zoom-discount-text');
+
+        if (product.price) {
+            priceEl.textContent = formatPrice(product.price) + ' TL';
         } else {
-            // Image Pages Logic
-            pagesArray = <?= json_encode(array_column($pages, 'image_path')) ?>;
-            totalPages = pagesArray.length;
-            currentPage = 0;
-
-            function prevPage() {
-                if (currentPage <= 0) return;
-                goToPage(currentPage - 1);
-            }
-
-            function nextPage() {
-                if (currentPage >= totalPages - 1) return;
-                goToPage(currentPage + 1);
-            }
-
-            function goToPage(index) {
-                if (index < 0 || index >= totalPages) return;
-                currentPage = index;
-                
-                const mainImg = document.getElementById('mainImg');
-                if (mainImg) {
-                    mainImg.src = 'uploads/brochures/pages/' + pagesArray[currentPage];
-                    mainImg.alt = 'Page ' + (currentPage + 1);
-                }
-                
-                document.getElementById('pageNo').innerText = 'Sayfa ' + (currentPage + 1) + ' / ' + totalPages;
-                highlightActiveThumbnail(currentPage);
-            }
-
-            window.prevPage = prevPage;
-            window.nextPage = nextPage;
-            window.goToPage = goToPage;
+            priceEl.textContent = '—';
         }
 
-        function highlightActiveThumbnail(index) {
-            document.querySelectorAll('.thumbnail-btn').forEach(btn => {
-                if (parseInt(btn.getAttribute('data-page-index')) === index) {
-                    btn.classList.add('active-thumb');
-                    // Scroll active thumbnail into view smoothly
-                    btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        if (product.original_price && product.original_price > product.price) {
+            origEl.textContent = formatPrice(product.original_price) + ' TL';
+            origEl.classList.remove('hidden');
+            const pct = Math.round((1 - product.price / product.original_price) * 100);
+            discBadge.classList.remove('hidden');
+            discText.textContent = `%${pct} İndirim`;
+        } else {
+            origEl.classList.add('hidden');
+            discBadge.classList.add('hidden');
+        }
+
+        unitEl.textContent = product.unit ? '(' + product.unit + ')' : '';
+
+        // Draw zoomed region on canvas
+        drawZoom(img, product);
+
+        // Open modal
+        document.getElementById('zoom-modal').classList.add('open');
+        document.body.style.overflow = 'hidden';
+
+        // Reset alert form
+        document.getElementById('alert-msg').classList.add('hidden');
+        document.getElementById('alert-btn').disabled = false;
+        document.getElementById('alert-btn').textContent = '🔔 Alarm Kur';
+
+        // Load price comparison
+        loadComparison(product.product_name);
+    }
+
+    function closeZoom() {
+        document.getElementById('zoom-modal').classList.remove('open');
+        document.body.style.overflow = '';
+        document.querySelectorAll('.product-hotspot').forEach(h => h.classList.remove('active'));
+    }
+
+    document.getElementById('zoom-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeZoom();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoom(); });
+
+    // ── Canvas zoom render ───────────────────────────────────────────
+    function drawZoom(img, product) {
+        const canvas = document.getElementById('zoom-canvas');
+        const ctx    = canvas.getContext('2d');
+        const w = img.naturalWidth  || img.width;
+        const h = img.naturalHeight || img.height;
+
+        // Source rect (% → px) with padding
+        const PAD = 0.015; // 1.5% padding
+        const sx = Math.max(0, (product.x_pct - PAD * 100) / 100 * w);
+        const sy = Math.max(0, (product.y_pct - PAD * 100) / 100 * h);
+        const sw = Math.min(w - sx, ((product.w_pct + PAD * 200) / 100) * w);
+        const sh = Math.min(h - sy, ((product.h_pct + PAD * 200) / 100) * h);
+
+        const maxW = 320, maxH = 320;
+        const scale = Math.min(maxW / sw, maxH / sh);
+        canvas.width  = Math.round(sw * scale);
+        canvas.height = Math.round(sh * scale);
+
+        // White bg
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        try {
+            ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+        } catch(e) {
+            // Cross-origin fallback
+            const freshImg = new Image();
+            freshImg.crossOrigin = 'anonymous';
+            freshImg.onload = () => ctx.drawImage(freshImg, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+            freshImg.src = img.src;
+        }
+    }
+
+    // ── Price comparison ─────────────────────────────────────────────
+    function loadComparison(productName) {
+        const list  = document.getElementById('compare-list');
+        const empty = document.getElementById('compare-empty');
+        list.innerHTML = '<div class="skeleton h-10 rounded-xl"></div><div class="skeleton h-10 rounded-xl mt-2"></div>';
+        empty.classList.add('hidden');
+
+        const params = new URLSearchParams({
+            product_name: productName,
+            exclude_brochure_id: BROCHURE_ID
+        });
+
+        fetch('api/price_compare.php?' + params)
+            .then(r => r.json())
+            .then(data => {
+                list.innerHTML = '';
+                if (!data.success || !data.results.length) {
+                    empty.classList.remove('hidden');
+                    return;
+                }
+                const minPrice = Math.min(...data.results.map(r => r.price));
+                data.results.slice(0, 6).forEach(r => {
+                    const isCheap = r.price === minPrice;
+                    const badge   = isCheap
+                        ? '<span class="compare-badge-cheap">En Ucuz</span>'
+                        : (r.price > minPrice ? `<span class="compare-badge-expensive">+${formatPrice(r.price - minPrice)} TL</span>` : '');
+                    const logo    = r.market_logo_url
+                        ? `<img src="${r.market_logo_url}" alt="${escHtml(r.market_name)}">`
+                        : `<span class="material-symbols-outlined text-slate-400 text-sm">storefront</span>`;
+                    const days    = r.days_left === 0 ? 'Son gün' : `${r.days_left} gün`;
+
+                    list.insertAdjacentHTML('beforeend', `
+                      <a href="${r.brochure_url}" target="_blank" class="compare-item">
+                        <div class="logo-wrap">${logo}</div>
+                        <div class="flex-1 min-w-0">
+                          <div class="font-bold text-sm text-slate-800">${escHtml(r.market_name)}</div>
+                          <div class="text-xs text-slate-400">${days} kaldı</div>
+                        </div>
+                        <div class="flex flex-col items-end gap-0.5">
+                          <span class="font-black text-base ${isCheap ? 'text-emerald-600' : 'text-slate-700'}">${formatPrice(r.price)} TL</span>
+                          ${badge}
+                        </div>
+                      </a>`);
+                });
+            })
+            .catch(() => { list.innerHTML = ''; empty.classList.remove('hidden'); });
+    }
+
+    // ── Price alert submit ───────────────────────────────────────────
+    function submitAlert(e) {
+        e.preventDefault();
+        const btn     = document.getElementById('alert-btn');
+        const msgEl   = document.getElementById('alert-msg');
+        const formData = new FormData(document.getElementById('alert-form'));
+        formData.append('action', 'create');
+        formData.append('market_id', MARKET_ID);
+
+        btn.disabled    = true;
+        btn.textContent = 'Kaydediliyor...';
+        msgEl.classList.add('hidden');
+
+        fetch('api/price_alert.php', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                msgEl.classList.remove('hidden');
+                if (data.success) {
+                    msgEl.textContent = '✅ ' + data.message;
+                    msgEl.className   = 'text-xs text-center text-emerald-600';
+                    btn.textContent   = '✅ Alarm Kuruldu';
                 } else {
-                    btn.classList.remove('active-thumb');
+                    msgEl.textContent = '⚠️ ' + data.error;
+                    msgEl.className   = 'text-xs text-center text-red-600';
+                    btn.disabled      = false;
+                    btn.textContent   = '🔔 Alarm Kur';
                 }
+            })
+            .catch(() => {
+                msgEl.textContent = '⚠️ Bir hata oluştu, tekrar deneyin.';
+                msgEl.className   = 'text-xs text-center text-red-600';
+                msgEl.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = '🔔 Alarm Kur';
             });
+    }
+
+    // ── Utilities ────────────────────────────────────────────────────
+    function formatPrice(n) {
+        return parseFloat(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function escHtml(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Init: load hotspots for first page ──────────────────────────
+    window.prevPage = prevPage;
+    window.nextPage = nextPage;
+    window.goToPage = goToPage;
+
+    // Trigger hotspot render if products already cached (first page)
+    window.addEventListener('load', () => {
+        const img = document.getElementById('mainImg');
+        if (img && img.complete) onImageLoad();
+    });
+
+    // PDF support (kept for backward compat)
+    <?php if ($is_pdf): ?>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdfUrl = 'uploads/brochures/pdfs/<?= htmlspecialchars($brochure['pdf_path']) ?>';
+    let pdfDoc = null, pageRendering = false, pageNumPending = null;
+    const canvas2 = document.getElementById('pdf-canvas');
+    const ctx2 = canvas2.getContext('2d');
+    const loader = document.getElementById('pdf-loading');
+    let pdfTotalPages = 0;
+
+    pdfjsLib.getDocument(pdfUrl).promise.then(function(doc) {
+        pdfDoc = doc;
+        pdfTotalPages = doc.numPages;
+        loader.classList.add('hidden');
+        canvas2.classList.remove('hidden');
+        populatePdfThumbnails();
+        renderPdfPage(1);
+    }).catch(() => {
+        loader.innerHTML = '<span class="text-red-500 font-bold">PDF dosyası yüklenemedi.</span>';
+    });
+
+    function renderPdfPage(num) {
+        pageRendering = true;
+        pdfDoc.getPage(num).then(page => {
+            const vp = page.getViewport({scale:1.5});
+            canvas2.height = vp.height; canvas2.width = vp.width;
+            page.render({canvasContext: ctx2, viewport: vp}).promise.then(() => {
+                pageRendering = false;
+                if (pageNumPending !== null) { renderPdfPage(pageNumPending); pageNumPending = null; }
+            });
+        });
+        document.getElementById('pageNo').innerText = 'Sayfa ' + num + ' / ' + pdfTotalPages;
+        currentPage = num - 1;
+        highlightActiveThumbnail(currentPage);
+    }
+    function queueRenderPage(num) {
+        if (pageRendering) pageNumPending = num; else renderPdfPage(num);
+    }
+    function populatePdfThumbnails() {
+        const ribbon = document.getElementById('thumbnail-ribbon');
+        ribbon.innerHTML = '';
+        for (let i = 1; i <= pdfTotalPages; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'thumbnail-btn shrink-0 border-2 rounded-xl w-16 h-20 flex flex-col items-center justify-center bg-slate-100 border-slate-200 text-slate-700 font-bold text-sm transition-all';
+            btn.dataset.pageIndex = i - 1;
+            btn.innerHTML = `<span class="text-[9px] text-slate-400 block font-normal uppercase">SAYFA</span>${i}`;
+            btn.onclick = () => queueRenderPage(i);
+            ribbon.appendChild(btn);
         }
+        highlightActiveThumbnail(0);
+    }
+    window.prevPage = () => { if (currentPage > 0) queueRenderPage(currentPage); };
+    window.nextPage = () => { if (currentPage < pdfTotalPages - 1) queueRenderPage(currentPage + 2); };
+    window.goToPage = (i) => { if (i >= 0 && i < pdfTotalPages) queueRenderPage(i + 1); };
+    <?php endif; ?>
     </script>
 </body>
 </html>
