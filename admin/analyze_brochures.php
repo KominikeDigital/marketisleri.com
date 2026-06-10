@@ -434,6 +434,7 @@ try {
     </main>
 
     <script>
+    const SITE_BASE = '<?= rtrim($site_url, '/') ?>';
     let isRunning = false;
 
     function log(msg, type = 'inf') {
@@ -450,7 +451,12 @@ try {
     async function analyzePage(brochureId, pageNum, totalPages, retryCount = 0) {
         log(`  → Sayfa ${pageNum}/${totalPages} analiz ediliyor...`);
         try {
-            const r    = await fetch(`../api/analyze_page.php?brochure_id=${brochureId}&page_number=${pageNum}`);
+            const r = await fetch(`${SITE_BASE}/api/analyze_page.php?brochure_id=${brochureId}&page_number=${pageNum}`);
+            const ct = r.headers.get('content-type') || '';
+            if (!ct.includes('application/json')) {
+                const txt = await r.text();
+                throw new Error(`Sunucu JSON döndürmedi (HTTP ${r.status}). Yanıt: ${txt.substring(0,120)}`);
+            }
             const data = await r.json();
             if (data.success) {
                 log(`    ✅ ${data.count ?? 0} ürün tespit edildi${data.cached ? ' (önbellekten)' : ''}`, 'ok');
