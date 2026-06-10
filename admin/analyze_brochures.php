@@ -7,7 +7,7 @@ session_start();
 require dirname(__DIR__) . '/config.php';
 
 // Auth check
-if (!isset($_SESSION['admin_logged_in'])) {
+if (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true) {
     header('Location: login.php'); exit;
 }
 
