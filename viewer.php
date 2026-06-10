@@ -501,59 +501,65 @@ if (!$is_pdf && !empty($pages)) {
                         <span class="material-symbols-outlined text-red-600 text-base">share</span>
                         Bu Kataloğu Paylaş
                     </h4>
-                    <div class="grid grid-cols-3 gap-3">
+                    <div class="space-y-3">
                         <?php
                         $share_url = urlencode($site_url . "/viewer.php?id=" . $brochure['id']);
                         $share_text = urlencode($brochure['market_name'] . " - " . $brochure['title'] . " Aktüel Ürün Kataloğu ve İndirimleri");
                         ?>
-                        <!-- WhatsApp -->
-                        <a href="https://api.whatsapp.com/send?text=<?= $share_text ?>%20<?= $share_url ?>" 
-                           target="_blank" rel="noopener" 
-                           class="w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white flex items-center justify-center transition shadow-sm border border-emerald-100" 
-                           title="WhatsApp ile Paylaş">
-                           <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                               <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.455L0 24zm6.59-4.846c1.66.986 3.296 1.488 4.966 1.489 5.485 0 9.948-4.469 9.952-9.959.002-2.661-1.034-5.161-2.909-7.038C16.792 1.77 14.3 1.72 12.012 1.72c-5.489 0-9.954 4.469-9.958 9.958-.002 1.95.51 3.843 1.482 5.508l-.99 3.61 3.705-.972c1.611.879 3.167 1.334 4.808 1.334zm11.233-7.559c-.309-.154-1.829-.903-2.107-1.004-.278-.101-.48-.153-.681.147-.202.3-.779.979-.955 1.18-.177.201-.354.226-.663.072-1.353-.679-2.316-1.189-3.21-2.723-.236-.406-.118-.625.035-.778.138-.138.309-.359.464-.539.15-.177.2-.3.3-.5.101-.2.05-.376-.026-.527-.076-.151-.681-1.637-.933-2.242-.244-.587-.492-.508-.681-.518-.176-.009-.379-.011-.581-.011-.202 0-.53.075-.808.376-.278.3-1.059 1.03-1.059 2.515s1.08 2.919 1.232 3.119c.152.2 2.126 3.245 5.15 4.553.719.311 1.28.497 1.718.636.722.23 1.381.197 1.902.12.579-.087 1.83-.748 2.083-1.47.253-.722.253-1.343.177-1.471-.076-.129-.278-.201-.587-.354z"/>
-                           </svg>
-                        </a>
-                        <!-- Telegram -->
-                        <a href="https://t.me/share/url?url=<?= $share_url ?>&text=<?= $share_text ?>" 
-                           target="_blank" rel="noopener" 
-                           class="w-9 h-9 rounded-xl bg-sky-50 hover:bg-sky-500 text-sky-600 hover:text-white flex items-center justify-center transition shadow-sm border border-sky-100" 
-                           title="Telegram ile Paylaş">
-                           <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                               <path d="M9.079 17.587l.317-4.47 8.13-7.34c.353-.313-.077-.487-.546-.177L6.877 12.015 2.54 10.66c-.94-.294-.959-.94.197-1.392L19.56 2.894c.777-.282 1.458.285 1.203 1.5l-2.859 13.48c-.216 1.02-.82 1.272-1.674.793l-4.353-3.21-2.099 2.02c-.232.232-.429.429-.879.429z"/>
-                           </svg>
-                        </a>
-                        <!-- SMS -->
-                        <a href="sms:?&body=<?= $share_text ?>%20<?= $share_url ?>" 
-                           class="w-9 h-9 rounded-xl bg-purple-50 hover:bg-purple-500 text-purple-600 hover:text-white flex items-center justify-center transition shadow-sm border border-purple-100" 
-                           title="SMS ile Paylaş">
-                           <span class="material-symbols-outlined text-lg">sms</span>
-                        </a>
-                        <!-- Facebook -->
-                        <a href="https://www.facebook.com/sharer/sharer.php?u=<?= $share_url ?>" 
-                           target="_blank" rel="noopener" 
-                           class="w-9 h-9 rounded-xl bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white flex items-center justify-center transition shadow-sm border border-blue-100" 
-                           title="Facebook'ta Paylaş">
-                           <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                               <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95z"/>
-                           </svg>
-                        </a>
-                        <!-- X (Twitter) -->
-                        <a href="https://twitter.com/intent/tweet?text=<?= $share_text ?>&url=<?= $share_url ?>" 
-                           target="_blank" rel="noopener" 
-                           class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-900 text-slate-800 hover:text-white flex items-center justify-center transition shadow-sm border border-slate-200" 
-                           title="X'te (Twitter) Paylaş">
-                           <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                           </svg>
-                        </a>
-                        <!-- Copy Link -->
-                        <button onclick="copyShareLink()" 
-                           class="w-9 h-9 rounded-xl bg-slate-50 hover:bg-slate-500 text-slate-600 hover:text-white flex items-center justify-center transition shadow-sm border border-slate-100 cursor-pointer" 
-                           title="Bağlantıyı Kopyala" id="copy-btn">
-                           <span class="material-symbols-outlined text-lg" id="copy-btn-icon">link</span>
-                        </button>
+                        <!-- Row 1: WhatsApp, Telegram, SMS -->
+                        <div class="grid grid-cols-3 gap-3 justify-items-center">
+                            <!-- WhatsApp -->
+                            <a href="https://api.whatsapp.com/send?text=<?= $share_text ?>%20<?= $share_url ?>" 
+                               target="_blank" rel="noopener" 
+                               class="w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white flex items-center justify-center transition shadow-sm border border-emerald-100" 
+                               title="WhatsApp ile Paylaş">
+                               <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                   <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.455L0 24zm6.59-4.846c1.66.986 3.296 1.488 4.966 1.489 5.485 0 9.948-4.469 9.952-9.959.002-2.661-1.034-5.161-2.909-7.038C16.792 1.77 14.3 1.72 12.012 1.72c-5.489 0-9.954 4.469-9.958 9.958-.002 1.95.51 3.843 1.482 5.508l-.99 3.61 3.705-.972c1.611.879 3.167 1.334 4.808 1.334zm11.233-7.559c-.309-.154-1.829-.903-2.107-1.004-.278-.101-.48-.153-.681.147-.202.3-.779.979-.955 1.18-.177.201-.354.226-.663.072-1.353-.679-2.316-1.189-3.21-2.723-.236-.406-.118-.625.035-.778.138-.138.309-.359.464-.539.15-.177.2-.3.3-.5.101-.2.05-.376-.026-.527-.076-.151-.681-1.637-.933-2.242-.244-.587-.492-.508-.681-.518-.176-.009-.379-.011-.581-.011-.202 0-.53.075-.808.376-.278.3-1.059 1.03-1.059 2.515s1.08 2.919 1.232 3.119c.152.2 2.126 3.245 5.15 4.553.719.311 1.28.497 1.718.636.722.23 1.381.197 1.902.12.579-.087 1.83-.748 2.083-1.47.253-.722.253-1.343.177-1.471-.076-.129-.278-.201-.587-.354z"/>
+                               </svg>
+                            </a>
+                            <!-- Telegram -->
+                            <a href="https://t.me/share/url?url=<?= $share_url ?>&text=<?= $share_text ?>" 
+                               target="_blank" rel="noopener" 
+                               class="w-9 h-9 rounded-xl bg-sky-50 hover:bg-sky-500 text-sky-600 hover:text-white flex items-center justify-center transition shadow-sm border border-sky-100" 
+                               title="Telegram ile Paylaş">
+                               <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                   <path d="M9.079 17.587l.317-4.47 8.13-7.34c.353-.313-.077-.487-.546-.177L6.877 12.015 2.54 10.66c-.94-.294-.959-.94.197-1.392L19.56 2.894c.777-.282 1.458.285 1.203 1.5l-2.859 13.48c-.216 1.02-.82 1.272-1.674.793l-4.353-3.21-2.099 2.02c-.232.232-.429.429-.879.429z"/>
+                               </svg>
+                            </a>
+                            <!-- SMS -->
+                            <a href="sms:?&body=<?= $share_text ?>%20<?= $share_url ?>" 
+                               class="w-9 h-9 rounded-xl bg-purple-50 hover:bg-purple-500 text-purple-600 hover:text-white flex items-center justify-center transition shadow-sm border border-purple-100" 
+                               title="SMS ile Paylaş">
+                               <span class="material-symbols-outlined text-lg">sms</span>
+                            </a>
+                        </div>
+                        <!-- Row 2: Facebook, X, Link -->
+                        <div class="grid grid-cols-3 gap-3 justify-items-center">
+                            <!-- Facebook -->
+                            <a href="https://www.facebook.com/sharer/sharer.php?u=<?= $share_url ?>" 
+                               target="_blank" rel="noopener" 
+                               class="w-9 h-9 rounded-xl bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white flex items-center justify-center transition shadow-sm border border-blue-100" 
+                               title="Facebook'ta Paylaş">
+                               <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                   <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95z"/>
+                               </svg>
+                            </a>
+                            <!-- X (Twitter) -->
+                            <a href="https://twitter.com/intent/tweet?text=<?= $share_text ?>&url=<?= $share_url ?>" 
+                               target="_blank" rel="noopener" 
+                               class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-900 text-slate-800 hover:text-white flex items-center justify-center transition shadow-sm border border-slate-200" 
+                               title="X'te (Twitter) Paylaş">
+                               <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                               </svg>
+                            </a>
+                            <!-- Copy Link -->
+                            <button onclick="copyShareLink()" 
+                               class="w-9 h-9 rounded-xl bg-slate-50 hover:bg-slate-500 text-slate-600 hover:text-white flex items-center justify-center transition shadow-sm border border-slate-100 cursor-pointer" 
+                               title="Bağlantıyı Kopyala" id="copy-btn">
+                               <span class="material-symbols-outlined text-lg" id="copy-btn-icon">link</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 

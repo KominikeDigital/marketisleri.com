@@ -76,7 +76,7 @@ try {
         LEFT JOIN brochure_pages bp ON bp.brochure_id = b.id
         LEFT JOIN brochure_products pr ON pr.brochure_id = b.id AND pr.page_number = bp.page_number
         WHERE b.end_date >= ?
-        GROUP BY b.id, b.title, b.start_date, b.end_date, b.analyzed_at, m.name, m.logo
+        GROUP BY b.id, b.title, b.start_date, b.end_date, b.analyzed_at, b.created_at, m.name, m.logo
         ORDER BY b.created_at DESC
         LIMIT 100
     ");
