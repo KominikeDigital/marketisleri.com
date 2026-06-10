@@ -340,21 +340,21 @@ $brochures = $brochures_stmt->fetchAll();
                                             }
                                             ?>
                                         </td>
-                                        <td class="p-4 pr-6 text-right space-x-2">
+                                        <td class="p-4 pr-6 text-right space-x-3">
                                             <a href="../viewer.php?id=<?= $b['id'] ?>" target="_blank" 
-                                               class="inline-flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-bold transition">
-                                                <span class="material-symbols-outlined text-xs">visibility</span>
+                                               class="inline-flex items-center gap-0.5 text-indigo-400 hover:text-indigo-300 text-xs font-bold transition">
+                                                <span class="material-symbols-outlined text-[14px]">visibility</span>
                                                 Gör
                                             </a>
                                             <button onclick="editBrochure(<?= htmlspecialchars(json_encode($b)) ?>)" 
-                                                    class="inline-flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">
-                                                <span class="material-symbols-outlined text-xs">edit</span>
+                                                    class="inline-flex items-center gap-0.5 text-amber-400 hover:text-amber-300 text-xs font-bold transition">
+                                                <span class="material-symbols-outlined text-[14px]">edit</span>
                                                 Düzenle
                                             </button>
                                             <a href="delete.php?type=brochure&id=<?= $b['id'] ?>" 
                                                onclick="return confirm('Bu broşürü ve tüm sayfalarını silmek istediğinizden emin misiniz?')"
-                                               class="inline-flex items-center gap-1 bg-red-950/40 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-red-900/30 transition">
-                                                <span class="material-symbols-outlined text-xs">delete</span>
+                                               class="inline-flex items-center gap-0.5 text-red-400 hover:text-red-300 text-xs font-bold transition">
+                                                <span class="material-symbols-outlined text-[14px]">delete</span>
                                                 Sil
                                             </a>
                                         </td>

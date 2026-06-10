@@ -9,8 +9,9 @@ if (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true) {
 // ─── Full scraper map (authoritative, always up to date) ─────────────────────
 // Local DB slug => aktuelbrosurler.com URL
 $SCRAPER_MAP = [
-    // Dedicated scrapers (BIM, A101, SOK handled by Node.js scraper)
-    // These use the generic PHP scraper via aktuelbrosurler.com:
+    'bim'                            => 'https://aktuelbrosurler.com/bim/brosurler',
+    'a101'                           => 'https://aktuelbrosurler.com/a101/brosurler',
+    'sok'                            => 'https://aktuelbrosurler.com/sok/brosurler',
     'migros'                         => 'https://aktuelbrosurler.com/migros/brosurler',
     'carrefoursa'                    => 'https://aktuelbrosurler.com/carrefour/brosurler',
     'tarim-kredi-market'             => 'https://aktuelbrosurler.com/tarim-kredi-kooperatif_market/brosurler',
@@ -65,6 +66,9 @@ $SCRAPER_MAP = [
 
 // ─── Markets to ensure exist ──────────────────────────────────────────────────
 $MARKETS_TO_ENSURE = [
+    ['BİM',                  'bim',                   'bim-1780746538.png',        'BİM Aktüel Ürünler ve İndirim Broşürleri',   1],
+    ['A101',                 'a101',                  'a101-1780746532.jpg',       'A101 Aldın Aldın İndirim Kataloğu',          1],
+    ['ŞOK',                  'sok',                   'sok-1780746544.png',        'ŞOK Haftanın Fırsatları Kataloğu',           1],
     ['Akyurt Süpermarket',   'akyurt-supermarket',    'akyurt-supermarket.png',    'Akyurt Süpermarket İndirim Kataloğu',        1],
     ['Ali Pehlivanoğlu',     'ali-pehlivanoglu',      'ali-pehlivanoglu.png',      'Ali Pehlivanoğlu İndirim Broşürleri',        1],
     ['Altun Market',         'altun-market',          'altun-market.png',          'Altun Market Aktüel Ürünler',                1],

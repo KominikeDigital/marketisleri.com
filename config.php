@@ -486,8 +486,72 @@ foreach ($all_markets_to_ensure as $m) {
     try { $ensure_market($pdo, $m[0], $m[1], $m[2], $m[3], $m[4]); } catch (Exception $e) {}
 }
 
+// Database Migrations for Market Logos matching physical files
+try {
+    $logo_mapping = [
+        'bim'                            => 'bim-1780746538.png',
+        'a101'                           => 'a101-1780746532.jpg',
+        'sok'                            => 'sok-1780746544.png',
+        'migros'                         => 'migros-1780746581.png',
+        'carrefoursa'                    => 'carrefoursa-1780746620.png',
+        'akyurt-supermarket'             => 'Akyurt.jpg',
+        'ali-pehlivanoglu'               => 'Ali Pehlivanoğlu.jpg',
+        'altun-market'                   => 'Altun.png',
+        'altunbilekler-market'           => 'Altunbilekler.jpg',
+        'anpa-gross'                     => 'Anpa Gross.jpg',
+        'arden-market'                   => 'Arden.jpg',
+        'aypa-market'                    => 'Aypa.jpg',
+        'baris-gross-market'             => 'Barış Gross.jpg',
+        'basdas-market'                  => 'Başdaş Market.jpg',
+        'basgimpa'                       => 'Başgimpa.jpg',
+        'beykoz-market'                  => 'Beykoz Market.jpg',
+        'bicen-market'                   => 'Biçen.png',
+        'bizim-toptan'                   => 'Bizim Toptan Satış Mağazaları.jpg',
+        'bonveno'                        => 'BonVeno.jpg',
+        'cagdas-market'                  => 'Çağdaş.png',
+        'cagri-market'                   => 'Çağrı.jpg',
+        'carsi-market'                   => 'Çarşı Market.png',
+        'damla-hipermarket'              => 'Damla Hipermarketleri.jpg',
+        'egesok-market'                  => 'Egeşok.jpg',
+        'esenlik-market'                 => 'Esenlik.jpg',
+        'essen-market'                   => 'Essen.jpg',
+        'etik-hipermarket'               => 'Etik.jpg',
+        'hakmar'                         => 'Hakmar Alışveriş Merkezleri.png',
+        'hakmar-ekspres'                 => 'Hakmar Express.jpg',
+        'onur-market'                    => 'Onur.jpg',
+        'ozhan-marketler'                => 'Özhan.jpg',
+        'sembol-center'                  => 'Sembol Center.jpg',
+        'serra-grup-market'              => 'Serra Grup.jpg',
+        'sevikoglu-market'               => 'Şevikoğlu.jpg',
+        'seyhanlar-market'               => 'Seyhanlar.png',
+        'show-hipermarket'               => 'Show .png',
+        'sultan-market'                  => 'Sultan.jpg',
+        'tahtakale-spot'                 => 'Tahtakale Spot.jpg',
+        'tema-market'                    => 'Tema Mağazalar Zinciri.jpg',
+        'ucler-market'                   => 'Üçler.png',
+        'ulukardesler'                   => 'Snowy Ulu Kardeşler.png',
+        'yunus-market'                   => 'Yunus.jpg',
+        'zirhlı-toptan'                  => 'Zırhlı Toptan Market.jpg',
+        'sehzade-market'                 => 'Şehzade.jpg',
+        'macrocenter'                    => 'Macrocenter.jpg',
+        'namli-hipermarket'              => 'Namlı Hipermarketleri.jpg',
+        'oruc-market'                    => 'Oruç.jpg',
+        'ozdilek'                        => 'Özdilek.jpg',
+        'file'                           => 'File.jpg',
+        'tespo-cash-carry'               => 'Tespo Cash & Carry.png'
+    ];
+
+    $update_logo_stmt = $pdo->prepare("UPDATE markets SET logo = ? WHERE slug = ?");
+    foreach ($logo_mapping as $slug => $logo_file) {
+        $update_logo_stmt->execute([$logo_file, $slug]);
+    }
+} catch (Exception $e) { /* ignore */ }
+
 // Full scrapers map: local DB slug => aktuelbrosurler.com path
 $scrapers = [
+    'bim'                            => 'https://aktuelbrosurler.com/bim/brosurler',
+    'a101'                           => 'https://aktuelbrosurler.com/a101/brosurler',
+    'sok'                            => 'https://aktuelbrosurler.com/sok/brosurler',
     'migros'                         => 'https://aktuelbrosurler.com/migros/brosurler',
     'carrefoursa'                    => 'https://aktuelbrosurler.com/carrefour/brosurler',
     'tarim-kredi-market'             => 'https://aktuelbrosurler.com/tarim-kredi-kooperatif_market/brosurler',

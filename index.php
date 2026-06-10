@@ -29,11 +29,29 @@ if ($selected_tab === 'upcoming') {
 } elseif ($selected_tab === 'expired') {
     $conditions[] = "b.end_date < ?";
     $params[] = $today;
+} elseif ($selected_tab === 'ending_soon') {
+    $conditions[] = "b.start_date <= ? AND b.end_date >= ? AND b.end_date <= ?";
+    $params[] = $today;
+    $params[] = $today;
+    $params[] = date('Y-m-d', strtotime('+1 day'));
 } else { // active
     $conditions[] = "b.start_date <= ? AND b.end_date >= ?";
     $params[] = $today;
     $params[] = $today;
 }
+
+// Limit homepage to 1 newest brochure per market (based on the current tab's condition)
+$subquery_cond = "";
+if ($selected_tab === 'upcoming') {
+    $subquery_cond = "AND b2.start_date > '$today'";
+} elseif ($selected_tab === 'expired') {
+    $subquery_cond = "AND b2.end_date < '$today'";
+} elseif ($selected_tab === 'ending_soon') {
+    $subquery_cond = "AND b2.start_date <= '$today' AND b2.end_date >= '$today' AND b2.end_date <= '" . date('Y-m-d', strtotime('+1 day')) . "'";
+} else { // active
+    $subquery_cond = "AND b2.start_date <= '$today' AND b2.end_date >= '$today'";
+}
+$conditions[] = "b.id = (SELECT b2.id FROM brochures b2 WHERE b2.market_id = b.market_id $subquery_cond ORDER BY b2.start_date DESC, b2.created_at DESC LIMIT 1)";
 
 // Category condition
 if ($selected_cat !== null) {
@@ -150,6 +168,9 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
 
         /* Sticky Header Transitions */
         header.sticky-header {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 50 !important;
             transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
         }
         header.sticky-header .header-container {
@@ -349,20 +370,25 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
         </section>
 
         <!-- Tabs & Brochures Listing -->
-        <section class="space-y-6">
+        <section id="listing-section" class="space-y-6">
             <!-- Tabs -->
-            <div class="flex border-b border-slate-200">
-                <a href="index.php?tab=active<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+            <div class="flex border-b border-slate-200 overflow-x-auto no-scrollbar">
+                <a href="index.php?tab=active<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section" 
                    class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'active' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
                     <span class="material-symbols-outlined text-lg">local_fire_department</span>
                     Aktif Broşürler
                 </a>
-                <a href="index.php?tab=upcoming<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                <a href="index.php?tab=ending_soon<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section" 
+                   class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'ending_soon' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
+                    <span class="material-symbols-outlined text-lg">hourglass_empty</span>
+                    Son 1 Gün
+                </a>
+                <a href="index.php?tab=upcoming<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section" 
                    class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'upcoming' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
                     <span class="material-symbols-outlined text-lg">schedule</span>
                     Yakında Başlayacaklar
                 </a>
-                <a href="index.php?tab=expired<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                <a href="index.php?tab=expired<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section" 
                    class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'expired' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
                     <span class="material-symbols-outlined text-lg">history</span>
                     Süresi Dolanlar
@@ -648,6 +674,23 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
                 } else {
                     header.classList.remove('scrolled');
                 }
+            }
+        });
+
+        // Keep scroll position on tab clicks
+        const tabLinks = document.querySelectorAll('#listing-section a[href*="tab="]');
+        tabLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                sessionStorage.setItem('tabScrollY', window.scrollY);
+            });
+        });
+
+        // Restore scroll position on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedScrollY = sessionStorage.getItem('tabScrollY');
+            if (savedScrollY !== null) {
+                window.scrollTo(0, parseFloat(savedScrollY));
+                sessionStorage.removeItem('tabScrollY');
             }
         });
     </script>

@@ -111,43 +111,179 @@ function download_image(string $url, string $dest, array $extra_headers = [], st
 }
 
 // ─── Turkish month → date parser ─────────────────────────────────────────────
+// ─── Turkish case folding helper ──────────────────────────────────────────────
+function tr_strtolower(string $str): string {
+    $str = str_replace(
+        ['I', 'İ', 'Ğ', 'Ü', 'Ş', 'Ö', 'Ç'],
+        ['ı', 'i', 'ğ', 'ü', 'ş', 'ö', 'ç'],
+        $str
+    );
+    return mb_strtolower($str, 'UTF-8');
+}
+
+// ─── Turkish month → date parser ─────────────────────────────────────────────
 function parse_turkish_date_range(string $text): array {
     $months = [
-        'ocak' => 1, 'şubat' => 2, 'mart' => 3, 'nisan' => 4,
-        'mayıs' => 5, 'haziran' => 6, 'temmuz' => 7, 'ağustos' => 8,
-        'eylül' => 9, 'ekim' => 10, 'kasım' => 11, 'aralık' => 12,
+        'ocak' => 1, 'şubat' => 2, 'subat' => 2, 'mart' => 3, 'nisan' => 4,
+        'mayıs' => 5, 'mayis' => 5, 'haziran' => 6, 'temmuz' => 7,
+        'ağustos' => 8, 'agustos' => 8, 'eylül' => 9, 'eylul' => 9,
+        'ekim' => 10, 'kasım' => 11, 'kasim' => 11, 'aralık' => 12, 'aralik' => 12,
     ];
     $now   = new DateTime();
     $year  = (int)$now->format('Y');
-    $text  = mb_strtolower(trim(preg_replace('/\s+/', ' ', $text)));
+    
+    // Lowercase with Turkish support
+    $text = tr_strtolower(trim(preg_replace('/\s+/', ' ', $text)));
+
+    // 1. Try to extract explicit year from title first (e.g. 2026, 2027)
+    if (preg_match('/20\d{2}/', $text, $ym)) {
+        $year = (int)$ym[0];
+    }
 
     $fmt = fn($y, $m, $d) => sprintf('%04d-%02d-%02d', $y, $m, $d);
     $add = fn($d, $n) => (new DateTime($d))->modify("+$n days")->format('Y-m-d');
 
-    // Cross-month range e.g. "30 Mayıs - 5 Haziran"
-    if (preg_match('/(\d+)\s+([a-zşğçıöü]+)\s*[-–]\s*(\d+)\s+([a-zşğçıöü]+)/', $text, $m)) {
-        $sm = $months[$m[2]] ?? 0; $em = $months[$m[4]] ?? 0;
+    // Helper to resolve year boundaries (e.g. December -> January transitions)
+    $handle_crossover = function($sm, $em, $start_yr, $end_yr) {
+        if ($sm > 0 && $em > 0 && $em < $sm) {
+            if ($start_yr === $end_yr) {
+                $curr_m = (int)date('n');
+                if ($curr_m <= 2 && $sm >= 11) {
+                    $start_yr = $start_yr - 1;
+                } else {
+                    $end_yr = $end_yr + 1;
+                }
+            }
+        }
+        return [$start_yr, $end_yr];
+    };
+
+    // Case 1: "10 haziran 2026 - 16 haziran 2026" or "10 haziran 2026 - 16 haziran 2027"
+    if (preg_match('/(\d{1,2})\s+([a-zşğçıöü]+)\s+(20\d{2})\s*[-–]\s*(\d{1,2})\s+([a-zşğçıöü]+)\s+(20\d{2})/u', $text, $m)) {
+        $sm = $months[$m[2]] ?? 0;
+        $em = $months[$m[5]] ?? 0;
+        $sy = (int)$m[3];
+        $ey = (int)$m[6];
         if ($sm && $em) {
+            list($sy, $ey) = $handle_crossover($sm, $em, $sy, $ey);
             return [
-                'start' => $fmt($year, $sm, (int)$m[1]),
-                'end'   => $fmt($year, $em, (int)$m[3]),
+                'start' => $fmt($sy, $sm, (int)$m[1]),
+                'end'   => $fmt($ey, $em, (int)$m[4])
             ];
         }
     }
 
-    // Same-month range e.g. "03-29 Haziran"
-    if (preg_match('/(\d+)\s*[-–]\s*(\d+)\s+([a-zşğçıöü]+)/', $text, $m)) {
-        $mo = $months[$m[3]] ?? 0;
-        if ($mo) return ['start' => $fmt($year, $mo, (int)$m[1]), 'end' => $fmt($year, $mo, (int)$m[2])];
+    // Case 2: "10 haziran 2026 - 16 haziran"
+    if (preg_match('/(\d{1,2})\s+([a-zşğçıöü]+)\s+(20\d{2})\s*[-–]\s*(\d{1,2})\s+([a-zşğçıöü]+)/u', $text, $m)) {
+        $sm = $months[$m[2]] ?? 0;
+        $em = $months[$m[5]] ?? 0;
+        $sy = (int)$m[3];
+        if ($sm && $em) {
+            list($sy, $ey) = $handle_crossover($sm, $em, $sy, $sy);
+            return [
+                'start' => $fmt($sy, $sm, (int)$m[1]),
+                'end'   => $fmt($ey, $em, (int)$m[4])
+            ];
+        }
     }
 
-    // Single date e.g. "25 Mayıs"
-    if (preg_match('/(\d+)\s+([a-zşğçıöü]+)/', $text, $m)) {
+    // Case 3: "10 haziran - 16 haziran 2026"
+    if (preg_match('/(\d{1,2})\s+([a-zşğçıöü]+)\s*[-–]\s*(\d{1,2})\s+([a-zşğçıöü]+)\s+(20\d{2})/u', $text, $m)) {
+        $sm = $months[$m[2]] ?? 0;
+        $em = $months[$m[4]] ?? 0;
+        $ey = (int)$m[5];
+        if ($sm && $em) {
+            list($sy, $ey) = $handle_crossover($sm, $em, $ey, $ey);
+            return [
+                'start' => $fmt($sy, $sm, (int)$m[1]),
+                'end'   => $fmt($ey, $em, (int)$m[3])
+            ];
+        }
+    }
+
+    // Case 4: "10 haziran - 16 haziran" (uses current or extracted year)
+    if (preg_match('/(\d{1,2})\s+([a-zşğçıöü]+)\s*[-–]\s*(\d{1,2})\s+([a-zşğçıöü]+)/u', $text, $m)) {
+        $sm = $months[$m[2]] ?? 0;
+        $em = $months[$m[4]] ?? 0;
+        if ($sm && $em) {
+            list($sy, $ey) = $handle_crossover($sm, $em, $year, $year);
+            return [
+                'start' => $fmt($sy, $sm, (int)$m[1]),
+                'end'   => $fmt($ey, $em, (int)$m[3])
+            ];
+        }
+    }
+
+    // Case 5: "10-16 haziran 2026"
+    if (preg_match('/(\d{1,2})\s*[-–]\s*(\d{1,2})\s+([a-zşğçıöü]+)\s+(20\d{2})/u', $text, $m)) {
+        $mo = $months[$m[3]] ?? 0;
+        $y  = (int)$m[4];
+        if ($mo) {
+            return [
+                'start' => $fmt($y, $mo, (int)$m[1]),
+                'end'   => $fmt($y, $mo, (int)$m[2])
+            ];
+        }
+    }
+
+    // Case 6: "10-16 haziran"
+    if (preg_match('/(\d{1,2})\s*[-–]\s*(\d{1,2})\s+([a-zşğçıöü]+)/u', $text, $m)) {
+        $mo = $months[$m[3]] ?? 0;
+        if ($mo) {
+            return [
+                'start' => $fmt($year, $mo, (int)$m[1]),
+                'end'   => $fmt($year, $mo, (int)$m[2])
+            ];
+        }
+    }
+
+    // Case 7: Numeric "04.06.2026 - 10.06.2026"
+    if (preg_match('/(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](20\d{2})\s*[-–]\s*(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](20\d{2})/', $text, $m)) {
+        return [
+            'start' => $fmt((int)$m[3], (int)$m[2], (int)$m[1]),
+            'end'   => $fmt((int)$m[6], (int)$m[5], (int)$m[4]),
+        ];
+    }
+
+    // Case 8: Numeric "04.06 - 10.06.2026"
+    if (preg_match('/(\d{1,2})[\.\/\-](\d{1,2})\s*[-–]\s*(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](20\d{2})/', $text, $m)) {
+        return [
+            'start' => $fmt((int)$m[5], (int)$m[2], (int)$m[1]),
+            'end'   => $fmt((int)$m[5], (int)$m[4], (int)$m[3]),
+        ];
+    }
+
+    // Case 9: Numeric "04.06 - 10.06"
+    if (preg_match('/(\d{1,2})[\.\/\-](\d{1,2})\s*[-–]\s*(\d{1,2})[\.\/\-](\d{1,2})/', $text, $m)) {
+        return [
+            'start' => $fmt($year, (int)$m[2], (int)$m[1]),
+            'end'   => $fmt($year, (int)$m[4], (int)$m[3]),
+        ];
+    }
+
+    // Case 10: Single date "10 haziran 2026"
+    if (preg_match('/(\d{1,2})\s+([a-zşğçıöü]+)\s+(20\d{2})/u', $text, $m)) {
+        $mo = $months[$m[2]] ?? 0;
+        $y  = (int)$m[3];
+        if ($mo) {
+            $start = $fmt($y, $mo, (int)$m[1]);
+            return ['start' => $start, 'end' => $add($start, 7)];
+        }
+    }
+
+    // Case 11: Single date "10 haziran"
+    if (preg_match('/(\d{1,2})\s+([a-zşğçıöü]+)/u', $text, $m)) {
         $mo = $months[$m[2]] ?? 0;
         if ($mo) {
             $start = $fmt($year, $mo, (int)$m[1]);
             return ['start' => $start, 'end' => $add($start, 7)];
         }
+    }
+
+    // Case 12: Single numeric date "04.06.2026"
+    if (preg_match('/(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](20\d{2})/', $text, $m)) {
+        $start = $fmt((int)$m[3], (int)$m[2], (int)$m[1]);
+        return ['start' => $start, 'end' => $add($start, 7)];
     }
 
     // Fallback: today → today+7

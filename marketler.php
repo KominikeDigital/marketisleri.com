@@ -61,6 +61,9 @@ $markets = $pdo->query("
 
         /* Sticky Header Transitions */
         header.sticky-header {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 50 !important;
             transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
         }
         header.sticky-header .header-container {
