@@ -296,7 +296,7 @@ function log(msg, type = 'inf') {
     content.scrollTop = content.scrollHeight;
 }
 
-async function analyzePage(brochureId, pageNum, totalPages) {
+async function analyzePage(brochureId, pageNum, totalPages, retryCount = 0) {
     log(`  → Sayfa ${pageNum}/${totalPages} analiz ediliyor...`);
     try {
         const r    = await fetch(`../api/analyze_page.php?brochure_id=${brochureId}&page_number=${pageNum}`);
@@ -305,6 +305,14 @@ async function analyzePage(brochureId, pageNum, totalPages) {
             log(`    ✅ ${data.count ?? 0} ürün tespit edildi${data.cached ? ' (önbellekten)' : ''}`, 'ok');
             return data.count ?? 0;
         } else {
+            // Check for 429 Rate Limit error
+            const errStr = String(data.error);
+            if ((errStr.includes('429') || errStr.toLowerCase().includes('quota') || errStr.toLowerCase().includes('limit')) && retryCount < 3) {
+                const waitTime = (retryCount + 1) * 6000; // 6s, 12s, 18s
+                log(`    ⚠️ Hız limiti/kota aşıldı. ${waitTime / 1000} saniye bekleniyor ve tekrar denenecek (Deneme ${retryCount + 1}/3)...`, 'inf');
+                await new Promise(res => setTimeout(res, waitTime));
+                return await analyzePage(brochureId, pageNum, totalPages, retryCount + 1);
+            }
             log(`    ❌ ${data.error}`, 'err');
             return 0;
         }
@@ -328,7 +336,7 @@ async function analyzeBrochure(brochureId, totalPages) {
         const pct = Math.round(done / totalPages * 100);
         if (progBar) progBar.style.width = pct + '%';
         if (progTxt) progTxt.textContent = `${done}/${totalPages}`;
-        await new Promise(res => setTimeout(res, 900)); // rate limit buffer
+        await new Promise(res => setTimeout(res, 4100)); // rate limit buffer (min 4s for free tier 15 RPM)
     }
 
     log(`✅ Broşür #${brochureId} tamamlandı!`, 'ok');
