@@ -387,6 +387,17 @@ try {
     }
 }
 
+// Database Migrations for Brochure AI Analysis status
+try {
+    $pdo->query("SELECT analyzed_at FROM brochures LIMIT 1");
+} catch (PDOException $e) {
+    try {
+        $pdo->exec("ALTER TABLE brochures ADD COLUMN analyzed_at TIMESTAMP NULL DEFAULT NULL");
+    } catch (PDOException $ex) {
+        // Fail silently
+    }
+}
+
 // Ensure and configure scraper markets
 $ensure_market = function($pdo, $name, $slug, $logo, $desc, $cat_id) {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM markets WHERE slug = ?");

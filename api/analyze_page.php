@@ -195,4 +195,13 @@ foreach ($products_raw as $p) {
     ];
 }
 
+// Check if all pages are now analyzed and update brochures.analyzed_at if complete
+try {
+    $pages_count = (int)$pdo->query("SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = {$brochure_id}")->fetchColumn();
+    $analyzed_count = (int)$pdo->query("SELECT COUNT(DISTINCT page_number) FROM brochure_products WHERE brochure_id = {$brochure_id}")->fetchColumn();
+    if ($pages_count > 0 && $analyzed_count === $pages_count) {
+        $pdo->prepare("UPDATE brochures SET analyzed_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$brochure_id]);
+    }
+} catch (Exception $e) { /* ignore */ }
+
 json_ok(['products' => $saved, 'cached' => false, 'count' => count($saved)]);

@@ -62,12 +62,12 @@ try { $analyzed_pages = (int)$pdo->query("SELECT COUNT(DISTINCT brochure_id * 10
 try { $total_products = (int)$pdo->query("SELECT COUNT(*) FROM brochure_products")->fetchColumn(); } catch(Exception $e){}
 try { $total_alerts   = (int)$pdo->query("SELECT COUNT(*) FROM price_alerts WHERE is_active = 1")->fetchColumn(); } catch(Exception $e){}
 
-// Fetch brochures with page count and analysis status
+// Fetch brochures with page count, analysis status and analyzed_at date
 $today     = date('Y-m-d');
 $brochures = [];
 try {
     $brochures_stmt = $pdo->prepare("
-        SELECT b.id, b.title, b.start_date, b.end_date,
+        SELECT b.id, b.title, b.start_date, b.end_date, b.analyzed_at,
                m.name AS market_name, m.logo AS market_logo,
                COUNT(DISTINCT bp.id) AS page_count,
                COUNT(DISTINCT CASE WHEN pr.brochure_id IS NOT NULL THEN bp.page_number END) AS analyzed_count
@@ -76,7 +76,7 @@ try {
         LEFT JOIN brochure_pages bp ON bp.brochure_id = b.id
         LEFT JOIN brochure_products pr ON pr.brochure_id = b.id AND pr.page_number = bp.page_number
         WHERE b.end_date >= ?
-        GROUP BY b.id, b.title, b.start_date, b.end_date, m.name, m.logo
+        GROUP BY b.id, b.title, b.start_date, b.end_date, b.analyzed_at, m.name, m.logo
         ORDER BY b.created_at DESC
         LIMIT 100
     ");
@@ -91,8 +91,9 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Broşür Analizi — Admin</title>
+    <title>Broşür AI Analizi - marketisleri.com</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
     <link rel="stylesheet" href="../uploads/tailwind.min.css">
@@ -100,273 +101,383 @@ try {
         body { font-family: 'Hanken Grotesk', sans-serif; }
         .font-title { font-family: 'Plus Jakarta Sans', sans-serif; }
         .progress-bar { transition: width 0.4s ease; }
-        .log-line { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
+        .log-line { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
         .log-ok  { color: #4ade80; }
         .log-err { color: #f87171; }
         .log-inf { color: #93c5fd; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-200 min-h-screen">
+<body class="bg-slate-950 text-slate-100 flex min-h-screen">
 
-<div class="max-w-6xl mx-auto px-4 py-8">
-
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-8">
-        <div>
-            <h1 class="font-title text-2xl font-black text-white">🔍 Broşür AI Analizi</h1>
-            <p class="text-slate-400 text-sm mt-1">Gemini Vision API ile ürün tespiti ve fiyat karşılaştırma</p>
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
+        <div class="p-6 border-b border-slate-800">
+            <a href="index.php" class="font-title text-xl font-black text-white flex items-center gap-2">
+                <?php if (file_exists('../uploads/logo.png')): ?>
+                    <img src="../uploads/logo.png" alt="logo" class="h-8 w-auto object-contain">
+                <?php else: ?>
+                    <span class="text-red-500 material-symbols-outlined">dashboard</span>
+                    marketisleri<span class="text-red-500">.panel</span>
+                <?php endif; ?>
+            </a>
         </div>
-        <a href="index.php" class="text-slate-400 hover:text-white transition text-sm flex items-center gap-1">
-            <span class="material-symbols-outlined text-base">arrow_back</span> Admin Panel
-        </a>
-    </div>
-
-    <?php if (isset($_SESSION['flash'])): ?>
-        <div class="bg-emerald-900/50 border border-emerald-700 text-emerald-300 rounded-xl px-4 py-3 mb-6 text-sm">
-            ✅ <?= htmlspecialchars($_SESSION['flash']) ?>
+        <nav class="flex-1 p-4 space-y-2">
+            <a href="index.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">space_dashboard</span> Dashboard
+            </a>
+            <a href="markets.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">storefront</span> Marketler
+            </a>
+            <a href="brochures.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">menu_book</span> Broşürler
+            </a>
+            <a href="magic_import.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">auto_fix</span> Sihirli Broşür Ekle
+            </a>
+            <a href="cron_setup.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">schedule</span> Otomasyon &amp; Cron
+            </a>
+            <a href="apply_scrapers.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">build</span> Scraper Ayarları
+            </a>
+            <a href="analyze_brochures.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold transition-all">
+                <span class="material-symbols-outlined text-lg">explore</span> Broşür AI Analizi
+            </a>
+            <a href="subscribers.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">mail</span> Aboneler
+            </a>
+            <a href="settings.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">settings</span> Ayarlar
+            </a>
+        </nav>
+        <div class="p-4 border-t border-slate-800">
+            <a href="logout.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-all font-semibold">
+                <span class="material-symbols-outlined text-lg">logout</span> Oturumu Kapat
+            </a>
         </div>
-        <?php unset($_SESSION['flash']); ?>
-    <?php endif; ?>
+    </aside>
 
-    <?php if (isset($_SESSION['flash_err'])): ?>
-        <div class="bg-red-900/50 border border-red-700 text-red-300 rounded-xl px-4 py-3 mb-6 text-sm">
-            ❌ <?= htmlspecialchars($_SESSION['flash_err']) ?>
-        </div>
-        <?php unset($_SESSION['flash_err']); ?>
-    <?php endif; ?>
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-y-auto">
+        <!-- Header -->
+        <header class="h-20 bg-slate-900/40 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-8 shrink-0">
+            <h1 class="font-title text-2xl font-bold text-white">🔍 Broşür AI Analiz Paneli</h1>
+        </header>
 
-    <!-- ═══════════════════════════════════════════════════════
-         Gemini API Key — ALWAYS VISIBLE
-    ════════════════════════════════════════════════════════ -->
-    <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 mb-8">
-        <h2 class="font-title text-lg font-black text-white mb-1 flex items-center gap-2">
-            <span class="material-symbols-outlined text-amber-400">key</span>
-            Gemini API Anahtarı
-        </h2>
-        <p class="text-slate-400 text-xs mb-4">
-            <a href="https://aistudio.google.com/apikey" target="_blank" class="text-blue-400 underline hover:text-blue-300">Google AI Studio</a>'dan ücretsiz anahtar alın (Gemini 2.0 Flash — günlük 1500 istek bedava).
-        </p>
+        <!-- Container -->
+        <div class="p-8 space-y-8 max-w-7xl w-full mx-auto">
 
-        <?php if ($current_key): ?>
-            <div class="bg-emerald-900/30 border border-emerald-700/50 text-emerald-300 rounded-xl px-4 py-3 mb-4 text-sm flex items-center gap-2">
-                <span class="material-symbols-outlined text-base">check_circle</span>
-                API anahtarı aktif: <code class="font-mono"><?= str_repeat('•', 24) . substr($current_key, -8) ?></code>
-            </div>
-        <?php else: ?>
-            <div class="bg-amber-900/30 border border-amber-700/50 text-amber-300 rounded-xl px-4 py-3 mb-4 text-sm flex items-center gap-2">
-                <span class="material-symbols-outlined text-base">warning</span>
-                Henüz API anahtarı girilmedi. Aşağıya girerek kaydedin.
-            </div>
-        <?php endif; ?>
-
-        <form method="POST" class="flex gap-3">
-            <input type="hidden" name="action" value="save_key">
-            <input type="text" name="gemini_api_key"
-                   value="<?= htmlspecialchars($current_key) ?>"
-                   placeholder="AIzaSy..."
-                   autocomplete="off"
-                   class="flex-1 bg-slate-700 border border-slate-600 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500 transition font-mono">
-            <button type="submit"
-                    class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold px-6 py-2.5 rounded-xl transition text-sm flex items-center gap-2">
-                <span class="material-symbols-outlined text-base">save</span>
-                Kaydet
-            </button>
-        </form>
-    </div>
-
-    <!-- Stats -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <?php foreach ([
-            ['Toplam Sayfa',     $total_pages,    'article',              'blue'],
-            ['Analiz Edilen',    $analyzed_pages, 'analytics',            'emerald'],
-            ['Tespit Edilen Ürün', $total_products,'inventory_2',         'purple'],
-            ['Aktif Alarm',      $total_alerts,   'notifications_active', 'amber'],
-        ] as [$label, $val, $icon, $color]): ?>
-            <div class="bg-slate-800 rounded-2xl p-5 border border-slate-700">
-                <span class="material-symbols-outlined text-<?= $color ?>-400 text-2xl"><?= $icon ?></span>
-                <div class="text-2xl font-black text-white mt-2"><?= number_format((int)$val) ?></div>
-                <div class="text-slate-400 text-xs mt-0.5"><?= $label ?></div>
-            </div>
-        <?php endforeach; ?>
-    </div>
-
-    <!-- Brochure List -->
-    <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden mb-6">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
-            <h2 class="font-title text-lg font-black text-white">Aktif Broşürler</h2>
-            <?php if ($current_key && !empty($brochures)): ?>
-                <button onclick="analyzeAll()" id="analyze-all-btn"
-                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center gap-2">
-                    <span class="material-symbols-outlined text-base">auto_awesome</span>
-                    Analiz Edilmeyenleri Analiz Et
-                </button>
+            <?php if (isset($_SESSION['flash'])): ?>
+                <div class="bg-emerald-900/30 border border-emerald-800 text-emerald-400 rounded-2xl px-5 py-3 text-sm">
+                    ✅ <?= htmlspecialchars($_SESSION['flash']) ?>
+                </div>
+                <?php unset($_SESSION['flash']); ?>
             <?php endif; ?>
-        </div>
 
-        <?php if (empty($brochures)): ?>
-            <div class="px-6 py-12 text-center text-slate-500">
-                <span class="material-symbols-outlined text-4xl mb-2 block">find_in_page</span>
-                Aktif broşür bulunamadı veya henüz sayfa yüklenmedi.
+            <?php if (isset($_SESSION['flash_err'])): ?>
+                <div class="bg-red-900/30 border border-red-800 text-red-400 rounded-2xl px-5 py-3 text-sm">
+                    ❌ <?= htmlspecialchars($_SESSION['flash_err']) ?>
+                </div>
+                <?php unset($_SESSION['flash_err']); ?>
+            <?php endif; ?>
+
+            <!-- API Key Section -->
+            <div class="bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-xl space-y-4">
+                <div>
+                    <h2 class="font-title text-lg font-black text-white flex items-center gap-2">
+                        <span class="material-symbols-outlined text-amber-500">key</span>
+                        Gemini API Anahtarı
+                    </h2>
+                    <p class="text-slate-400 text-xs mt-1">
+                        <a href="https://aistudio.google.com/apikey" target="_blank" class="text-red-500 hover:text-red-400 underline font-semibold">Google AI Studio</a>'dan ücretsiz anahtar alabilirsiniz. (Dakikada 15 istek sınırı vardır).
+                    </p>
+                </div>
+
+                <?php if ($current_key): ?>
+                    <div class="bg-emerald-900/10 border border-emerald-900/40 text-emerald-400 rounded-2xl px-4 py-3 text-xs flex items-center gap-2 max-w-md">
+                        <span class="material-symbols-outlined text-base">check_circle</span>
+                        Aktif API Anahtarı: <code class="font-mono"><?= str_repeat('•', 24) . substr($current_key, -8) ?></code>
+                    </div>
+                <?php else: ?>
+                    <div class="bg-amber-900/10 border border-amber-900/40 text-amber-400 rounded-2xl px-4 py-3 text-xs flex items-center gap-2 max-w-md">
+                        <span class="material-symbols-outlined text-base">warning</span>
+                        Henüz API anahtarı kaydedilmedi. Lütfen sisteme girin.
+                    </div>
+                <?php endif; ?>
+
+                <form method="POST" class="flex gap-3 max-w-2xl">
+                    <input type="hidden" name="action" value="save_key">
+                    <input type="text" name="gemini_api_key"
+                           value="<?= htmlspecialchars($current_key) ?>"
+                           placeholder="AIzaSy..."
+                           autocomplete="off"
+                           class="flex-1 bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 text-sm outline-none transition font-mono">
+                    <button type="submit"
+                            class="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2.5 rounded-xl transition text-sm flex items-center gap-2">
+                        <span class="material-symbols-outlined text-base">save</span>
+                        Kaydet
+                    </button>
+                </form>
             </div>
-        <?php else: ?>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-700">
-                    <tr>
-                        <th class="px-6 py-3 text-left">Market / Broşür</th>
-                        <th class="px-6 py-3 text-center">Sayfa</th>
-                        <th class="px-6 py-3 text-center">Analiz</th>
-                        <th class="px-6 py-3 text-center">İşlem</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-700/50">
-                    <?php foreach ($brochures as $b): ?>
-                        <?php
-                        $analyzed = (int)$b['analyzed_count'];
-                        $total    = (int)$b['page_count'];
-                        $pct      = $total > 0 ? round($analyzed / $total * 100) : 0;
-                        ?>
-                        <tr class="hover:bg-slate-750/50 transition" id="brow-<?= $b['id'] ?>">
-                            <td class="px-6 py-4">
-                                <div class="flex items-center gap-3">
-                                    <?php if ($b['market_logo']): ?>
-                                        <img src="../uploads/markets/<?= htmlspecialchars($b['market_logo']) ?>"
-                                             class="w-8 h-8 rounded-lg object-contain bg-white p-0.5 shrink-0" alt="">
-                                    <?php endif; ?>
-                                    <div>
-                                        <div class="font-bold text-white text-sm"><?= htmlspecialchars($b['market_name']) ?></div>
-                                        <div class="text-slate-400 text-xs truncate max-w-xs"><?= htmlspecialchars($b['title']) ?></div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 text-center text-slate-300"><?= $total ?></td>
-                            <td class="px-6 py-4">
-                                <div class="flex items-center gap-2 justify-center">
-                                    <div class="w-24 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                        <div class="progress-bar h-full rounded-full <?= $pct == 100 ? 'bg-emerald-500' : 'bg-blue-500' ?>"
-                                             style="width: <?= $pct ?>%"
-                                             id="prog-<?= $b['id'] ?>"></div>
-                                    </div>
-                                    <span class="text-xs text-slate-400" id="prog-txt-<?= $b['id'] ?>"><?= $analyzed ?>/<?= $total ?></span>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 text-center">
-                                <?php if ($current_key): ?>
-                                    <?php if ($analyzed < $total || $total === 0): ?>
-                                        <button onclick="analyzeBrochure(<?= $b['id'] ?>, <?= max(1, $total) ?>)"
-                                                id="btn-<?= $b['id'] ?>"
-                                                class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                                            Analiz Et
-                                        </button>
-                                    <?php else: ?>
-                                        <span class="text-emerald-400 text-xs font-bold">✅ Tamamlandı</span>
-                                    <?php endif; ?>
-                                <?php else: ?>
-                                    <span class="text-slate-600 text-xs">API key gerekli</span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <?php foreach ([
+                    ['Toplam Sayfa',     $total_pages,    'article',              'indigo'],
+                    ['Analiz Edilen',    $analyzed_pages, 'analytics',            'emerald'],
+                    ['Tespit Edilen Ürün', $total_products,'inventory_2',         'purple'],
+                    ['Aktif Alarm',      $total_alerts,   'notifications_active', 'amber'],
+                ] as [$label, $val, $icon, $color]): ?>
+                    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex items-center justify-between shadow-xl">
+                        <div>
+                            <p class="text-sm text-slate-400 font-semibold mb-1"><?= $label ?></p>
+                            <h3 class="text-2xl font-black text-white"><?= number_format((int)$val) ?></h3>
+                        </div>
+                        <span class="w-12 h-12 rounded-2xl bg-<?= $color ?>-500/10 text-<?= $color ?>-400 flex items-center justify-center material-symbols-outlined text-2xl">
+                            <?= $icon ?>
+                        </span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- Brochure List Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+                <div class="flex flex-col sm:flex-row items-center justify-between px-6 py-5 border-b border-slate-800 gap-4">
+                    <h2 class="font-title text-lg font-bold text-white flex items-center gap-2">
+                        <span class="material-symbols-outlined text-red-500">menu_book</span>
+                        Aktif Broşürler
+                    </h2>
+                    <?php if ($current_key && !empty($brochures)): ?>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="analyzeAll(true)" id="analyze-un-btn"
+                                    class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-emerald-950/20">
+                                <span class="material-symbols-outlined text-sm">auto_awesome</span>
+                                Analiz Edilmeyenleri Analiz Et
+                            </button>
+                            <button onclick="analyzeAll(false)" id="analyze-all-btn"
+                                    class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-blue-950/20">
+                                <span class="material-symbols-outlined text-sm">pageview</span>
+                                Tümünü Analiz Et (Zorla)
+                            </button>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (empty($brochures)): ?>
+                    <div class="px-6 py-16 text-center text-slate-500">
+                        <span class="material-symbols-outlined text-5xl mb-2 block text-slate-600">find_in_page</span>
+                        Aktif veya yayındaki broşür bulunamadı.
+                    </div>
+                <?php else: ?>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-850 text-slate-400 text-xs font-semibold uppercase tracking-wider bg-slate-900/50">
+                                    <th class="px-6 py-4">Market / Broşür</th>
+                                    <th class="px-6 py-4 text-center">Sayfa Sayısı</th>
+                                    <th class="px-6 py-4 text-center">İlerleme</th>
+                                    <th class="px-6 py-4 text-center">Durum</th>
+                                    <th class="px-6 py-4 text-center">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-850 text-sm">
+                                <?php foreach ($brochures as $b): ?>
+                                    <?php
+                                    $analyzed = (int)$b['analyzed_count'];
+                                    $total    = (int)$b['page_count'];
+                                    $pct      = $total > 0 ? round($analyzed / $total * 100) : 0;
+                                    ?>
+                                    <tr class="hover:bg-slate-850/30 transition" id="brow-<?= $b['id'] ?>">
+                                        <td class="px-6 py-4">
+                                            <div class="flex items-center gap-3">
+                                                <?php if ($b['market_logo']): ?>
+                                                    <img src="../uploads/markets/<?= htmlspecialchars($b['market_logo']) ?>"
+                                                         class="w-8 h-8 rounded-lg object-contain bg-white p-0.5 shrink-0" alt="">
+                                                <?php endif; ?>
+                                                <div>
+                                                    <div class="font-bold text-white"><?= htmlspecialchars($b['market_name']) ?></div>
+                                                    <div class="text-slate-400 text-xs truncate max-w-sm" title="<?= htmlspecialchars($b['title']) ?>"><?= htmlspecialchars($b['title']) ?></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-center font-semibold text-slate-300"><?= $total ?></td>
+                                        <td class="px-6 py-4">
+                                            <div class="flex items-center gap-2 justify-center">
+                                                <div class="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden shrink-0">
+                                                    <div class="progress-bar h-full rounded-full <?= $pct == 100 ? 'bg-emerald-500' : 'bg-red-500' ?>"
+                                                         style="width: <?= $pct ?>%"
+                                                         id="prog-<?= $b['id'] ?>"></div>
+                                                </div>
+                                                <span class="text-xs font-bold text-slate-400" id="prog-txt-<?= $b['id'] ?>"><?= $analyzed ?>/<?= $total ?></span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-center" id="status-cell-<?= $b['id'] ?>">
+                                            <?php if ($b['analyzed_at']): ?>
+                                                <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25" title="Tamamlanma Tarihi">
+                                                    <span class="material-symbols-outlined text-[12px] font-black">check_circle</span>
+                                                    ✔ Başarılı (<?= date('d.m.Y H:i', strtotime($b['analyzed_at'])) ?>)
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                                    <span class="material-symbols-outlined text-[12px]">pending</span>
+                                                    Analiz Edilmedi
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="px-6 py-4 text-center">
+                                            <?php if ($current_key): ?>
+                                                <button onclick="analyzeBrochure(<?= $b['id'] ?>, <?= max(1, $total) ?>)"
+                                                        id="btn-<?= $b['id'] ?>"
+                                                        class="bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-slate-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition">
+                                                    Analiz Et
+                                                </button>
+                                            <?php else: ?>
+                                                <span class="text-slate-600 text-xs font-bold">API Key Gerekli</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Log Panel -->
+            <div id="log-panel" class="hidden bg-slate-900 border border-slate-800 rounded-3xl p-6 font-mono text-xs text-slate-300 shadow-xl space-y-4">
+                <div class="text-slate-500 text-xs font-bold flex items-center justify-between border-b border-slate-800 pb-3">
+                    <span class="flex items-center gap-2"><span class="material-symbols-outlined text-red-500 text-base">terminal</span> 📋 Analiz Terminal Logu</span>
+                    <button onclick="document.getElementById('log-panel').classList.add('hidden')" class="text-slate-500 hover:text-slate-300 text-xs font-bold flex items-center gap-1"><span class="material-symbols-outlined text-sm">close</span> Kapat</button>
+                </div>
+                <div id="log-content" class="max-h-72 overflow-y-auto space-y-2"></div>
+            </div>
+
         </div>
-        <?php endif; ?>
-    </div>
+    </main>
 
-    <!-- Log output -->
-    <div id="log-panel" class="hidden bg-black rounded-2xl p-5 border border-slate-700 font-mono overflow-y-auto max-h-72">
-        <div class="text-slate-500 text-xs mb-2 flex items-center justify-between">
-            <span>📋 Analiz Logu</span>
-            <button onclick="document.getElementById('log-panel').classList.add('hidden')" class="text-slate-600 hover:text-slate-400 text-xs">Kapat</button>
-        </div>
-        <div id="log-content"></div>
-    </div>
+    <script>
+    let isRunning = false;
 
-</div>
+    function log(msg, type = 'inf') {
+        const panel   = document.getElementById('log-panel');
+        const content = document.getElementById('log-content');
+        panel.classList.remove('hidden');
+        const line = document.createElement('div');
+        line.className = 'log-line log-' + type;
+        line.textContent = msg;
+        content.appendChild(line);
+        content.scrollTop = content.scrollHeight;
+    }
 
-<script>
-function log(msg, type = 'inf') {
-    const panel   = document.getElementById('log-panel');
-    const content = document.getElementById('log-content');
-    panel.classList.remove('hidden');
-    const line = document.createElement('div');
-    line.className = 'log-line log-' + type;
-    line.textContent = msg;
-    content.appendChild(line);
-    content.scrollTop = content.scrollHeight;
-}
-
-async function analyzePage(brochureId, pageNum, totalPages, retryCount = 0) {
-    log(`  → Sayfa ${pageNum}/${totalPages} analiz ediliyor...`);
-    try {
-        const r    = await fetch(`../api/analyze_page.php?brochure_id=${brochureId}&page_number=${pageNum}`);
-        const data = await r.json();
-        if (data.success) {
-            log(`    ✅ ${data.count ?? 0} ürün tespit edildi${data.cached ? ' (önbellekten)' : ''}`, 'ok');
-            return data.count ?? 0;
-        } else {
-            // Check for 429 Rate Limit error
-            const errStr = String(data.error);
-            if ((errStr.includes('429') || errStr.toLowerCase().includes('quota') || errStr.toLowerCase().includes('limit')) && retryCount < 3) {
-                const waitTime = (retryCount + 1) * 6000; // 6s, 12s, 18s
-                log(`    ⚠️ Hız limiti/kota aşıldı. ${waitTime / 1000} saniye bekleniyor ve tekrar denenecek (Deneme ${retryCount + 1}/3)...`, 'inf');
-                await new Promise(res => setTimeout(res, waitTime));
-                return await analyzePage(brochureId, pageNum, totalPages, retryCount + 1);
+    async function analyzePage(brochureId, pageNum, totalPages, retryCount = 0) {
+        log(`  → Sayfa ${pageNum}/${totalPages} analiz ediliyor...`);
+        try {
+            const r    = await fetch(`../api/analyze_page.php?brochure_id=${brochureId}&page_number=${pageNum}`);
+            const data = await r.json();
+            if (data.success) {
+                log(`    ✅ ${data.count ?? 0} ürün tespit edildi${data.cached ? ' (önbellekten)' : ''}`, 'ok');
+                return data.count ?? 0;
+            } else {
+                // Check for 429 Rate Limit/Quota error
+                const errStr = String(data.error);
+                if ((errStr.includes('429') || errStr.toLowerCase().includes('quota') || errStr.toLowerCase().includes('limit')) && retryCount < 3) {
+                    const waitTime = (retryCount + 1) * 6000; // 6s, 12s, 18s
+                    log(`    ⚠️ Hız limiti/kota aşıldı. ${waitTime / 1000} saniye bekleniyor ve tekrar denenecek (Deneme ${retryCount + 1}/3)...`, 'inf');
+                    await new Promise(res => setTimeout(res, waitTime));
+                    return await analyzePage(brochureId, pageNum, totalPages, retryCount + 1);
+                }
+                log(`    ❌ ${data.error}`, 'err');
+                return 0;
             }
-            log(`    ❌ ${data.error}`, 'err');
+        } catch(e) {
+            log(`    ❌ İstek hatası: ${e.message}`, 'err');
             return 0;
         }
-    } catch(e) {
-        log(`    ❌ İstek hatası: ${e.message}`, 'err');
-        return 0;
-    }
-}
-
-async function analyzeBrochure(brochureId, totalPages) {
-    const btn     = document.getElementById(`btn-${brochureId}`);
-    const progBar = document.getElementById(`prog-${brochureId}`);
-    const progTxt = document.getElementById(`prog-txt-${brochureId}`);
-    if (btn) { btn.disabled = true; btn.textContent = 'Analiz ediliyor...'; }
-    log(`\n📋 Broşür #${brochureId} analiz başladı (${totalPages} sayfa)`, 'inf');
-
-    let done = 0;
-    for (let p = 1; p <= totalPages; p++) {
-        await analyzePage(brochureId, p, totalPages);
-        done++;
-        const pct = Math.round(done / totalPages * 100);
-        if (progBar) progBar.style.width = pct + '%';
-        if (progTxt) progTxt.textContent = `${done}/${totalPages}`;
-        await new Promise(res => setTimeout(res, 4100)); // rate limit buffer (min 4s for free tier 15 RPM)
     }
 
-    log(`✅ Broşür #${brochureId} tamamlandı!`, 'ok');
-    if (btn) {
-        btn.textContent = '✅ Tamamlandı';
-        btn.className   = btn.className.replace(/bg-blue-\d+\s*hover:bg-blue-\d+/, 'bg-emerald-700 cursor-default');
-        btn.disabled    = true;
+    async function analyzeBrochure(brochureId, totalPages) {
+        const btn     = document.getElementById(`btn-${brochureId}`);
+        const progBar = document.getElementById(`prog-${brochureId}`);
+        const progTxt = document.getElementById(`prog-txt-${brochureId}`);
+        const statusEl = document.getElementById(`status-cell-${brochureId}`);
+        
+        if (btn) { btn.disabled = true; btn.textContent = 'Çalışıyor...'; }
+        log(`\n📋 Broşür #${brochureId} analiz başladı (${totalPages} sayfa)`, 'inf');
+
+        let done = 0;
+        let successCount = 0;
+        for (let p = 1; p <= totalPages; p++) {
+            const count = await analyzePage(brochureId, p, totalPages);
+            done++;
+            successCount += count;
+            const pct = Math.round(done / totalPages * 100);
+            if (progBar) progBar.style.width = pct + '%';
+            if (progTxt) progTxt.textContent = `${done}/${totalPages}`;
+            await new Promise(res => setTimeout(res, 4100)); // rate limit buffer (min 4s for free tier 15 RPM)
+        }
+
+        log(`✅ Broşür #${brochureId} tamamlandı!`, 'ok');
+        
+        // Update the status cell on UI dynamically after completion
+        if (statusEl) {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('tr-TR') + ' ' + now.toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'});
+            statusEl.innerHTML = `
+                <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                    <span class="material-symbols-outlined text-[12px] font-black">check_circle</span>
+                    ✔ Başarılı (${dateStr})
+                </span>`;
+        }
+        
+        if (btn) {
+            btn.textContent = 'Analiz Et';
+            btn.disabled    = false;
+        }
+        if (progBar) { 
+            progBar.classList.remove('bg-red-500'); 
+            progBar.classList.add('bg-emerald-500'); 
+        }
     }
-    if (progBar) { progBar.classList.remove('bg-blue-500'); progBar.classList.add('bg-emerald-500'); }
-}
 
-async function analyzeAll() {
-    const allBtn = document.getElementById('analyze-all-btn');
-    if (allBtn) { allBtn.disabled = true; allBtn.textContent = 'Analiz ediliyor...'; }
+    async function analyzeAll(onlyUnanalyzed = false) {
+        if (isRunning) return;
+        isRunning = true;
+        
+        const allBtn = document.getElementById('analyze-all-btn');
+        const unBtn  = document.getElementById('analyze-un-btn');
+        
+        // Disable bulk buttons and other buttons
+        if (allBtn) allBtn.disabled = true;
+        if (unBtn) unBtn.disabled = true;
+        if (onlyUnanalyzed && unBtn) unBtn.textContent = 'Çalışıyor...';
+        if (!onlyUnanalyzed && allBtn) allBtn.textContent = 'Çalışıyor...';
 
-    const rows = document.querySelectorAll('button[id^="btn-"]');
-    for (const btn of rows) {
-        if (btn.disabled) continue;
-        const id      = btn.id.replace('btn-', '');
-        const progTxt = document.getElementById(`prog-txt-${id}`);
-        if (!progTxt) continue;
-        const [done, total] = progTxt.textContent.split('/').map(Number);
-        if (done < total) {
+        const rows = document.querySelectorAll('button[id^="btn-"]');
+        for (const btn of rows) {
+            const id = btn.id.replace('btn-', '');
+            const progTxt = document.getElementById(`prog-txt-${id}`);
+            const statusCell = document.getElementById(`status-cell-${id}`);
+            if (!progTxt) continue;
+            
+            const [done, total] = progTxt.textContent.split('/').map(Number);
+            const isCompleted = statusCell && statusCell.innerText.includes('✔ Başarılı');
+
+            // If only unanalyzed, skip if fully complete
+            if (onlyUnanalyzed && isCompleted) {
+                continue;
+            }
+            
+            // Disable individual button
+            btn.disabled = true;
             await analyzeBrochure(parseInt(id), total);
             await new Promise(res => setTimeout(res, 2000));
         }
-    }
 
-    if (allBtn) { allBtn.disabled = false; allBtn.textContent = '✅ Tümü Tamamlandı'; }
-}
-</script>
+        // Restore bulk buttons
+        if (allBtn) { allBtn.disabled = false; allBtn.textContent = 'Tümünü Analiz Et (Zorla)'; }
+        if (unBtn) { unBtn.disabled = false; unBtn.textContent = 'Analiz Edilmeyenleri Analiz Et'; }
+        isRunning = false;
+    }
+    </script>
 </body>
 </html>

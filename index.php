@@ -148,6 +148,37 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+        /* Sticky Header Transitions */
+        header.sticky-header {
+            transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        header.sticky-header .header-container {
+            height: 112px !important; /* h-28 equivalent (desktop 2x scale) */
+            transition: height 0.3s ease !important;
+        }
+        header.sticky-header .logo-img {
+            height: 88px !important; /* Larger logo on load */
+            transition: height 0.3s ease !important;
+        }
+        @media (max-width: 768px) {
+            header.sticky-header .header-container {
+                height: 80px !important; /* h-20 equivalent on mobile */
+            }
+            header.sticky-header .logo-img {
+                height: 56px !important; /* h-14 on mobile */
+            }
+        }
+        header.sticky-header.scrolled {
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            background-color: rgba(255, 255, 255, 0.95);
+        }
+        header.sticky-header.scrolled .header-container {
+            height: 64px !important; /* h-16 equivalent when scrolled */
+        }
+        header.sticky-header.scrolled .logo-img {
+            height: 48px !important; /* h-12 equivalent when scrolled */
+        }
+
         /* Hero drift animations */
         @keyframes float-orb-1 {
             0% { transform: translate(0, 0) scale(1); }
@@ -174,11 +205,11 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
 
     <!-- Header Navigation -->
-    <header class="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between">
+    <header class="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50 sticky-header">
+        <div class="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between header-container">
             <a href="index.php" class="flex items-center gap-2">
                 <?php if (file_exists('uploads/logo.png')): ?>
-                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-16 w-auto object-contain">
+                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-16 w-auto object-contain logo-img">
                 <?php else: ?>
                     <span class="font-title text-base font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                         <span class="text-red-600 material-symbols-outlined font-black">receipt_long</span>
@@ -608,6 +639,17 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
                 mouseGlow.style.top = '-999px';
             });
         }
+        // Header scroll behavior
+        window.addEventListener('scroll', () => {
+            const header = document.querySelector('header.sticky-header');
+            if (header) {
+                if (window.scrollY > 20) {
+                    header.classList.add('scrolled');
+                } else {
+                    header.classList.remove('scrolled');
+                }
+            }
+        });
     </script>
 </body>
 </html>

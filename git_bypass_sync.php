@@ -5,6 +5,9 @@ echo "<h2>marketisleri.com Direkt Güncelleyici (Git Çözücü)</h2>";
 
 $files = [
     'config.php' => 'config.php',
+    'index.php' => 'index.php',
+    'market.php' => 'market.php',
+    'marketler.php' => 'marketler.php',
     'viewer.php' => 'viewer.php',
     'admin/analyze_brochures.php' => 'admin/analyze_brochures.php',
     'admin/test_key.php' => 'admin/test_key.php',
@@ -13,7 +16,8 @@ $files = [
     'admin/apply_scrapers.php' => 'admin/apply_scrapers.php',
     'api/analyze_page.php' => 'api/analyze_page.php',
     'api/price_alert.php' => 'api/price_alert.php',
-    'api/price_compare.php' => 'api/price_compare.php'
+    'api/price_compare.php' => 'api/price_compare.php',
+    'admin/merge_duplicate_markets.php' => 'admin/merge_duplicate_markets.php'
 ];
 
 $repo_base = "https://raw.githubusercontent.com/KominikeDigital/marketisleri.com/main/";
