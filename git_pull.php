@@ -6,10 +6,68 @@
  */
 session_start();
 
-// Simple auth check to prevent unauthorized execution
-// Using a simple password query parameter: ?key=161224
+// Simple auth check
 $auth_key = "161224";
 $is_authenticated = isset($_GET['key']) && $_GET['key'] === $auth_key;
+
+// Function to check if a PHP function is enabled
+function is_func_enabled($func) {
+    if (!function_exists($func)) return false;
+    $disabled = explode(',', (string)ini_get('disable_functions'));
+    return !in_array($func, array_map('trim', $disabled));
+}
+
+// Safe shell execution wrapper
+function run_local_command($cmd) {
+    if (is_func_enabled('shell_exec')) {
+        return @shell_exec($cmd);
+    }
+    if (is_func_enabled('exec')) {
+        $output = [];
+        @exec($cmd, $output);
+        return implode("\n", $output);
+    }
+    if (is_func_enabled('system')) {
+        ob_start();
+        @system($cmd);
+        return ob_get_clean();
+    }
+    if (is_func_enabled('passthru')) {
+        ob_start();
+        @passthru($cmd);
+        return ob_get_clean();
+    }
+    return false;
+}
+
+// Auto-fix .git/config URL
+$git_config_path = __DIR__ . '/.git/config';
+$git_config_updated = false;
+$git_config_error = "";
+$current_git_url = "";
+
+if (file_exists($git_config_path)) {
+    $config_content = @file_get_contents($git_config_path);
+    if ($config_content !== false) {
+        // Extract current URL
+        if (preg_match('/url\s*=\s*(https:\/\/github\.com\/[^\s]+)/', $config_content, $matches)) {
+            $current_git_url = trim($matches[1]);
+        }
+        
+        // Check if it has the old URL and auto-update
+        if (strpos($config_content, 'marketisler.com.git') !== false) {
+            $new_config = str_replace('marketisler.com.git', 'marketisleri.com.git', $config_content);
+            if (@file_put_contents($git_config_path, $new_config) !== false) {
+                $git_config_updated = true;
+                $current_git_url = str_replace('marketisler.com.git', 'marketisleri.com.git', $current_git_url);
+            } else {
+                $git_config_error = "Yazma yetkisi yok (Permission Denied).";
+            }
+        }
+    }
+} else {
+    $git_config_error = ".git/config dosyası bulunamadı. Bu klasörde git kurulu olmayabilir.";
+}
 
 ?>
 <!DOCTYPE html>
@@ -31,7 +89,6 @@ $is_authenticated = isset($_GET['key']) && $_GET['key'] === $auth_key;
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-center items-center p-4">
 
     <div class="max-w-3xl w-full bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl p-6 md:p-8 space-y-8 relative overflow-hidden">
-        <!-- Glowing accents -->
         <div class="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-red-500/5 blur-[80px] pointer-events-none"></div>
         <div class="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-rose-500/5 blur-[80px] pointer-events-none"></div>
 
@@ -49,7 +106,6 @@ $is_authenticated = isset($_GET['key']) && $_GET['key'] === $auth_key;
         </div>
 
         <?php if (!$is_authenticated): ?>
-            <!-- Auth Form -->
             <div class="py-12 text-center max-w-md mx-auto space-y-6">
                 <span class="material-symbols-outlined text-5xl text-red-500 animate-pulse">lock</span>
                 <div class="space-y-2">
@@ -67,8 +123,18 @@ $is_authenticated = isset($_GET['key']) && $_GET['key'] === $auth_key;
                 </form>
             </div>
         <?php else: ?>
-            <!-- Control Panel -->
             <div class="space-y-6">
+                
+                <!-- URL Auto Update Info -->
+                <?php if ($git_config_updated): ?>
+                    <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-xs text-emerald-400 flex items-start gap-2.5">
+                        <span class="material-symbols-outlined text-sm mt-0.5 shrink-0">check_circle</span>
+                        <div>
+                            <strong>BAŞARILI:</strong> Eski Git URL'si (marketisler.com) tespit edildi ve başarıyla yenisiyle (marketisleri.com) güncellendi! cPanel Git™ Version Control sayfasında artık güncellemeleri başarıyla alabilirsiniz.
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <!-- Git Status / Info -->
                     <div class="bg-slate-900/50 rounded-2xl border border-slate-800 p-5 space-y-4">
@@ -79,13 +145,11 @@ $is_authenticated = isset($_GET['key']) && $_GET['key'] === $auth_key;
                         <div class="space-y-2 text-xs text-slate-400">
                             <p><strong>Çalışma Dizini:</strong> <code class="bg-slate-950 p-1 rounded"><?= htmlspecialchars(__DIR__) ?></code></p>
                             <p><strong>PHP Kullanıcısı:</strong> <code class="bg-slate-950 p-1 rounded"><?= htmlspecialchars(get_current_user()) ?></code></p>
-                            <p><strong>Git Versiyonu:</strong> 
-                                <code class="bg-slate-950 p-1 rounded">
-                                    <?php 
-                                    $git_ver = @shell_exec('git --version');
-                                    echo htmlspecialchars($git_ver ? trim($git_ver) : 'Git kurulu değil veya PHP exec() kapalı');
-                                    ?>
-                                </code>
+                            <p><strong>Git Depo URL:</strong> <code class="bg-slate-950 p-1 rounded text-slate-300"><?= htmlspecialchars($current_git_url ?: 'Okunamadı veya .git yok') ?></code></p>
+                            <p><strong>Git Komut Desteği:</strong> 
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold <?= (is_func_enabled('shell_exec') || is_func_enabled('exec')) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20' ?>">
+                                    <?= (is_func_enabled('shell_exec') || is_func_enabled('exec')) ? 'Aktif (Shell Çalıştırılabilir)' : 'Pasif (Hosting Tarafından Engelli)' ?>
+                                </span>
                             </p>
                         </div>
                     </div>
@@ -97,15 +161,23 @@ $is_authenticated = isset($_GET['key']) && $_GET['key'] === $auth_key;
                             Eylemler
                         </h3>
                         <div class="flex flex-col gap-2">
-                            <a href="?key=<?= $auth_key ?>&action=status" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs py-3 px-4 rounded-xl text-center transition flex items-center justify-center gap-2">
-                                <span class="material-symbols-outlined text-sm">troubleshoot</span> Git Durumunu Sorgula
-                            </a>
-                            <a href="?key=<?= $auth_key ?>&action=pull" class="bg-red-600 hover:bg-red-500 text-white font-bold text-xs py-3 px-4 rounded-xl text-center transition flex items-center justify-center gap-2">
-                                <span class="material-symbols-outlined text-sm">cloud_download</span> Değişiklikleri Çek (Git Pull)
-                            </a>
-                            <a href="?key=<?= $auth_key ?>&action=force_reset" onclick="return confirm('UYARI: Sunucudaki tüm değişiklikler sıfırlanacak ve GitHub ile eşitlenecektir. Emin misiniz?')" class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs py-3 px-4 rounded-xl text-center transition flex items-center justify-center gap-2">
-                                <span class="material-symbols-outlined text-sm">published_with_changes</span> Çakışmaları Zorla Düzelt (Hard Reset & Pull)
-                            </a>
+                            <?php if (is_func_enabled('shell_exec') || is_func_enabled('exec') || is_func_enabled('system') || is_func_enabled('passthru')): ?>
+                                <a href="?key=<?= $auth_key ?>&action=status" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs py-3 px-4 rounded-xl text-center transition flex items-center justify-center gap-2">
+                                    <span class="material-symbols-outlined text-sm">troubleshoot</span> Git Durumunu Sorgula
+                                </a>
+                                <a href="?key=<?= $auth_key ?>&action=pull" class="bg-red-600 hover:bg-red-500 text-white font-bold text-xs py-3 px-4 rounded-xl text-center transition flex items-center justify-center gap-2">
+                                    <span class="material-symbols-outlined text-sm">cloud_download</span> Değişiklikleri Çek (Git Pull)
+                                </a>
+                                <a href="?key=<?= $auth_key ?>&action=force_reset" onclick="return confirm('UYARI: Sunucudaki tüm yerel çakışmalar sıfırlanacak ve GitHub ile eşitlenecektir. Emin misiniz?')" class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs py-3 px-4 rounded-xl text-center transition flex items-center justify-center gap-2">
+                                    <span class="material-symbols-outlined text-sm">published_with_changes</span> Çakışmaları Zorla Düzelt (Hard Reset & Pull)
+                                </a>
+                            <?php else: ?>
+                                <div class="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl text-[11px] text-amber-400 space-y-2">
+                                    <p><strong>Hosting komut çalıştırmayı engellemiş.</strong></p>
+                                    <p>Ancak paneli açtığınızda arka planda <code>.git/config</code> dosyasındaki yönlendirme hatasını <strong>otomatik olarak düzelttik</strong>.</p>
+                                    <p>Şimdi tek yapmanız gereken <strong>cPanel'e girip Git™ Version Control</strong> sayfasından güncellemeyi (Update from Source / Pull) çalıştırmaktır. Çakışma olmayacaktır.</p>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -114,7 +186,6 @@ $is_authenticated = isset($_GET['key']) && $_GET['key'] === $auth_key;
                 <?php
                 if (isset($_GET['action'])) {
                     $action = $_GET['action'];
-                    $output = [];
                     $commands = [];
 
                     if ($action === 'status') {
@@ -128,7 +199,6 @@ $is_authenticated = isset($_GET['key']) && $_GET['key'] === $auth_key;
                     } elseif ($action === 'force_reset') {
                         $commands[] = 'git fetch --all 2>&1';
                         $commands[] = 'git reset --hard origin/main 2>&1';
-                        $commands[] = 'git clean -fd 2>&1'; // cleans untracked folders if needed, except ignored
                         $commands[] = 'git status 2>&1';
                     }
 
@@ -139,8 +209,8 @@ $is_authenticated = isset($_GET['key']) && $_GET['key'] === $auth_key;
                     foreach ($commands as $cmd) {
                         echo "<div class='space-y-1'>";
                         echo "<span class='text-red-400 font-bold'>$ </span><span class='text-slate-100 font-bold'>$cmd</span>";
-                        $res = @shell_exec($cmd);
-                        echo "<pre class='text-slate-400 bg-slate-900/30 p-2 rounded border border-slate-900/50 mt-1 whitespace-pre-wrap'>" . htmlspecialchars($res ?: '(Çıktı yok veya komut çalıştırılamadı)') . "</pre>";
+                        $res = run_local_command($cmd);
+                        echo "<pre class='text-slate-400 bg-slate-900/30 p-2 rounded border border-slate-900/50 mt-1 whitespace-pre-wrap'>" . htmlspecialchars($res !== false ? ($res ?: '(Çıktı yok)') : 'Komut çalıştırma fonksiyonları bu sunucuda kapalı.') . "</pre>";
                         echo "</div>";
                     }
                     
@@ -153,7 +223,7 @@ $is_authenticated = isset($_GET['key']) && $_GET['key'] === $auth_key;
                 <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-xs text-amber-400 flex items-start gap-2.5">
                     <span class="material-symbols-outlined text-sm mt-0.5 shrink-0">warning</span>
                     <div>
-                        <strong>GÜVENLİK NOTU:</strong> Git güncelleme işlemleri bittikten sonra bu <code>git_pull.php</code> dosyasını sunucudan silmeyi veya ismini tahmin edilemeyecek bir şeyle değiştirmeyi unutmayın!
+                        <strong>GÜVENLİK NOTU:</strong> Git güncelleme işlemleri bittikten sonra bu <code>git_pull.php</code> dosyasını sunucudan silmeyi unutmayın!
                     </div>
                 </div>
             </div>
