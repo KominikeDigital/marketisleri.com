@@ -3,6 +3,27 @@
 header("Content-Type: text/html; charset=utf-8");
 echo "<h2>marketisleri.com Direkt Güncelleyici (Git Çözücü)</h2>";
 
+// Self-update git_bypass_sync.php first
+$self_url = "https://raw.githubusercontent.com/KominikeDigital/marketisleri.com/main/git_bypass_sync.php";
+$self_path = __FILE__;
+$opts_self = [
+    "http" => [
+        "method" => "GET",
+        "header" => "User-Agent: PHP-Github-Deployer-Self\r\n"
+    ]
+];
+$context_self = stream_context_create($opts_self);
+$self_content = @file_get_contents($self_url, false, $context_self);
+if ($self_content !== false && strlen($self_content) > 0) {
+    $current_content = @file_get_contents($self_path);
+    if (md5($current_content) !== md5($self_content)) {
+        if (@file_put_contents($self_path, $self_content) !== false) {
+            echo "<p style='color: blue; font-weight: bold;'>🔄 Güncelleyici (git_bypass_sync.php) kendini güncelledi! Lütfen sayfayı yenileyin (F5 veya Yenile).</p>";
+            exit;
+        }
+    }
+}
+
 $files = [
     'config.php' => 'config.php',
     'index.php' => 'index.php',
