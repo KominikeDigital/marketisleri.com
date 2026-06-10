@@ -15,8 +15,8 @@ header('Access-Control-Allow-Origin: *');
 require dirname(__DIR__) . '/config.php';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function json_err(string $msg, int $code = 400): never {
-    http_response_code($code);
+function json_err(string $msg, int $code = 200): never {
+    http_response_code(200); // Always return HTTP 200 to prevent web server (Apache/cPanel) from intercepting and returning custom HTML error pages
     echo json_encode(['success' => false, 'error' => $msg]);
     exit;
 }

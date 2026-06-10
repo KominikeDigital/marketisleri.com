@@ -126,10 +126,11 @@ if (!$is_pdf && !empty($pages)) {
         #page-wrapper {
             position: relative;
             display: inline-block;
+            max-height: 75vh;
             cursor: crosshair;
-            transition: width 0.2s ease;
         }
         #mainImg {
+            max-height: 75vh;
             max-width: 100%;
             width: auto;
             display: block;
@@ -137,20 +138,6 @@ if (!$is_pdf && !empty($pages)) {
             border: 1px solid #e2e8f0;
             box-shadow: 0 4px 12px rgba(0,0,0,.08);
         }
-        /* Viewer viewport: fixed height, scrolls when zoomed */
-        #viewer-viewport {
-            max-height: 75vh;
-            overflow: auto;
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            padding: 8px;
-            scrollbar-width: thin;
-            scrollbar-color: #e2e8f0 transparent;
-        }
-        #viewer-viewport::-webkit-scrollbar { width: 6px; height: 6px; }
-        #viewer-viewport::-webkit-scrollbar-track { background: transparent; }
-        #viewer-viewport::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 3px; }
         #product-overlay {
             position: absolute;
             inset: 0;
@@ -403,16 +390,13 @@ if (!$is_pdf && !empty($pages)) {
                                     Bu broşürde hiç sayfa bulunmamaktadır.
                                 </div>
                             <?php else: ?>
-                                <!-- Viewport wrapper for zooming and scrolling -->
-                                <div id="viewer-viewport">
-                                    <!-- Page wrapper with product overlay -->
-                                    <div id="page-wrapper" class="relative inline-block max-w-full transition-all duration-200">
-                                        <img id="mainImg" 
-                                             src="uploads/brochures/pages/<?= htmlspecialchars($pages[0]['image_path']) ?>" 
-                                             alt="Sayfa 1"
-                                             onload="onImageLoad()">
-                                        <div id="product-overlay"></div>
-                                    </div>
+                                <!-- Page wrapper with product overlay -->
+                                <div id="page-wrapper" class="relative inline-block max-w-full">
+                                    <img id="mainImg" 
+                                         src="uploads/brochures/pages/<?= htmlspecialchars($pages[0]['image_path']) ?>" 
+                                         alt="Sayfa 1"
+                                         onload="onImageLoad()">
+                                    <div id="product-overlay"></div>
                                 </div>
                                 <div id="no-products-hint" class="hidden">
                                 </div>
@@ -433,20 +417,7 @@ if (!$is_pdf && !empty($pages)) {
                         </button>
                     </div>
 
-                    <!-- Zoom Controls (below navigation) -->
-                    <?php if (!$is_pdf && !empty($pages)): ?>
-                    <div class="flex items-center justify-center gap-1 pt-3">
-                        <button onclick="zoomOut()" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 flex items-center justify-center transition border border-slate-200" title="Uzaklaştır">
-                            <span class="material-symbols-outlined font-black text-lg">zoom_out</span>
-                        </button>
-                        <button onclick="zoomReset()" class="px-3 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 flex items-center justify-center transition text-xs font-bold border border-slate-200" title="Sıfırla">
-                            <span class="material-symbols-outlined text-base">restart_alt</span>
-                        </button>
-                        <button onclick="zoomIn()" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 flex items-center justify-center transition border border-slate-200" title="Yakınlaştır">
-                            <span class="material-symbols-outlined font-black text-lg">zoom_in</span>
-                        </button>
-                    </div>
-                    <?php endif; ?>
+
                 </div>
 
                 <!-- Thumbnail ribbon -->
@@ -741,13 +712,6 @@ if (!$is_pdf && !empty($pages)) {
     const totalPages        = pagesArray.length;
     let   currentPage       = 0;
 
-    // Zooming states
-    let currentZoom = 1;
-    const zoomStep = 0.25;
-    const maxZoom = 3.0;
-    const minZoom = 1.0;
-    let baseWidth = 0;
-
     // Products cache: { pageNum: [...] }
     const productsCache     = { 1: <?= json_encode($first_page_products) ?> };
 
@@ -757,9 +721,6 @@ if (!$is_pdf && !empty($pages)) {
 
     function goToPage(index) {
         if (index < 0 || index >= totalPages) return;
-        
-        // Reset zoom first
-        zoomReset();
         
         // Prevent layout collapse by keeping the current height
         const wrapper = document.getElementById('page-wrapper');
@@ -802,13 +763,8 @@ if (!$is_pdf && !empty($pages)) {
     function onImageLoad() {
         // Clear min-height restriction once loaded
         const wrapper = document.getElementById('page-wrapper');
-        const img     = document.getElementById('mainImg');
         if (wrapper) {
             wrapper.style.minHeight = '';
-        }
-
-        if (img && currentZoom === 1) {
-            baseWidth = img.clientWidth;
         }
 
         const pageNum = currentPage + 1;
@@ -840,49 +796,7 @@ if (!$is_pdf && !empty($pages)) {
         });
     }
 
-    // ── Zoom Controls Logic ──────────────────────────────────────────
-    function zoomIn() {
-        if (currentZoom < maxZoom) {
-            currentZoom = Math.round((currentZoom + zoomStep) * 100) / 100;
-            applyZoom();
-        }
-    }
 
-    function zoomOut() {
-        if (currentZoom > minZoom) {
-            currentZoom = Math.round((currentZoom - zoomStep) * 100) / 100;
-            if (currentZoom < minZoom) currentZoom = minZoom;
-            applyZoom();
-        }
-    }
-
-    function zoomReset() {
-        currentZoom = 1;
-        applyZoom();
-    }
-
-    function applyZoom() {
-        const wrapper = document.getElementById('page-wrapper');
-        const img = document.getElementById('mainImg');
-        if (!wrapper || !img) return;
-
-        if (currentZoom <= 1) {
-            // Reset to natural fit
-            wrapper.style.width = '';
-            img.style.width = '';
-            img.style.maxWidth = '';
-            img.style.maxHeight = '';
-        } else {
-            if (!baseWidth || baseWidth === 0) {
-                baseWidth = img.clientWidth || img.naturalWidth || 600;
-            }
-            // Expand wrapper width; viewport scrolls to show overflow
-            img.style.maxWidth = 'none';
-            img.style.maxHeight = 'none';
-            img.style.width = (baseWidth * currentZoom) + 'px';
-            wrapper.style.width = (baseWidth * currentZoom) + 'px';
-        }
-    }
 
     // ── Analyze page via Gemini ──────────────────────────────────────
     function analyzeCurrentPage() {
