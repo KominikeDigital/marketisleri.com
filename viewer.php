@@ -112,19 +112,22 @@ if (!$is_pdf && !empty($pages)) {
         }
         .product-hotspot {
             position: absolute;
-            border: 2px solid transparent;
+            border: 1.5px dashed rgba(239, 68, 68, 0.45);
+            background: rgba(239, 68, 68, 0.03);
             border-radius: 6px;
             cursor: pointer;
             pointer-events: all;
-            transition: background .15s, border-color .15s;
+            transition: background .15s, border-color .15s, transform .15s;
             box-sizing: border-box;
         }
         .product-hotspot:hover {
-            background: rgba(239,68,68,.12);
-            border-color: rgba(239,68,68,.5);
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.8);
+            transform: scale(1.02);
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
         }
         .product-hotspot.active {
-            background: rgba(239,68,68,.18);
+            background: rgba(239, 68, 68, 0.18);
             border-color: #ef4444;
         }
 
@@ -339,15 +342,14 @@ if (!$is_pdf && !empty($pages)) {
                                 </div>
                             <?php else: ?>
                                 <!-- Page wrapper with product overlay -->
-                                <div id="page-wrapper">
+                                <div id="page-wrapper" class="relative inline-block max-w-full">
                                     <img id="mainImg" 
                                          src="uploads/brochures/pages/<?= htmlspecialchars($pages[0]['image_path']) ?>" 
                                          alt="Sayfa 1"
                                          onload="onImageLoad()">
                                     <div id="product-overlay"></div>
                                 </div>
-                                <div id="no-products-hint" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-slate-400 bg-white/80 rounded-full px-3 py-1 border border-slate-200">
-                                    Ürüne tıkla • Fiyat ve karşılaştırma gör
+                                <div id="no-products-hint" class="hidden">
                                 </div>
                             <?php endif; ?>
                         <?php endif; ?>
@@ -677,10 +679,18 @@ if (!$is_pdf && !empty($pages)) {
 
         const hint = document.getElementById('no-products-hint');
         if (!products || products.length === 0) {
-            if (hint) hint.classList.remove('hidden');
+            if (hint) {
+                hint.innerHTML = '<span class="material-symbols-outlined text-slate-400 text-lg">info</span> Bu sayfa henüz yapay zeka ile analiz edilmemiş.';
+                hint.className = "mt-4 text-xs font-semibold text-slate-400 bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-200/50 text-center flex items-center justify-center gap-1.5 max-w-sm mx-auto";
+                hint.classList.remove('hidden');
+            }
             return;
         }
-        if (hint) hint.classList.add('hidden');
+        if (hint) {
+            hint.innerHTML = '<span class="material-symbols-outlined text-red-500 text-lg animate-pulse">info</span> Ürünlerin üzerine tıklayarak fiyat karşılaştırmasını ve alarmını görebilirsiniz.';
+            hint.className = "mt-4 text-sm font-bold text-red-600 bg-red-50/50 rounded-xl px-5 py-3 border border-red-100 text-center flex items-center justify-center gap-2 max-w-md mx-auto";
+            hint.classList.remove('hidden');
+        }
 
         products.forEach((p, i) => {
             if (p.x_pct == null) return;
