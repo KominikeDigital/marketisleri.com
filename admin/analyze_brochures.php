@@ -62,8 +62,44 @@ try { $analyzed_pages = (int)$pdo->query("SELECT COUNT(DISTINCT brochure_id * 10
 try { $total_products = (int)$pdo->query("SELECT COUNT(*) FROM brochure_products")->fetchColumn(); } catch(Exception $e){}
 try { $total_alerts   = (int)$pdo->query("SELECT COUNT(*) FROM price_alerts WHERE is_active = 1")->fetchColumn(); } catch(Exception $e){}
 
+// Fetch all markets for filter dropdown
+$markets_list = [];
+try {
+    $markets_list = $pdo->query("SELECT id, name FROM markets ORDER BY name ASC")->fetchAll();
+} catch (Exception $e) {}
+
 // Fetch brochures with page count, analysis status and analyzed_at date
-$today     = date('Y-m-d');
+$filter = $_GET['filter'] ?? 'active';
+$market_filter_id = isset($_GET['market_id']) && $_GET['market_id'] !== 'all' ? (int)$_GET['market_id'] : null;
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+
+$today = date('Y-m-d');
+$where_clauses = [];
+$params = [];
+
+if ($filter === 'active') {
+    $where_clauses[] = "b.end_date >= :today";
+    $params[':today'] = $today;
+} elseif ($filter === 'expired') {
+    $where_clauses[] = "b.end_date < :today";
+    $params[':today'] = $today;
+}
+
+if ($market_filter_id !== null) {
+    $where_clauses[] = "b.market_id = :market_id";
+    $params[':market_id'] = $market_filter_id;
+}
+
+if ($search !== '') {
+    $where_clauses[] = "(b.title LIKE :search OR m.name LIKE :search)";
+    $params[':search'] = '%' . $search . '%';
+}
+
+$where_sql = '';
+if (!empty($where_clauses)) {
+    $where_sql = 'WHERE ' . implode(' AND ', $where_clauses);
+}
+
 $brochures = [];
 try {
     $brochures_stmt = $pdo->prepare("
@@ -75,12 +111,12 @@ try {
         JOIN markets m ON m.id = b.market_id
         LEFT JOIN brochure_pages bp ON bp.brochure_id = b.id
         LEFT JOIN brochure_products pr ON pr.brochure_id = b.id AND pr.page_number = bp.page_number
-        WHERE b.end_date >= ?
+        $where_sql
         GROUP BY b.id, b.title, b.start_date, b.end_date, b.analyzed_at, b.created_at, m.name, m.logo
         ORDER BY b.created_at DESC
         LIMIT 100
     ");
-    $brochures_stmt->execute([$today]);
+    $brochures_stmt->execute($params);
     $brochures = $brochures_stmt->fetchAll();
 } catch (Exception $e) {
     $brochures = [];
@@ -245,7 +281,7 @@ try {
                 <div class="flex flex-col sm:flex-row items-center justify-between px-6 py-5 border-b border-slate-800 gap-4">
                     <h2 class="font-title text-lg font-bold text-white flex items-center gap-2">
                         <span class="material-symbols-outlined text-red-500">menu_book</span>
-                        Aktif Broşürler
+                        <?= ($filter === 'all' ? 'Tüm Broşürler' : ($filter === 'expired' ? 'Süresi Geçmiş Broşürler' : 'Aktif Broşürler')) ?>
                     </h2>
                     <?php if ($current_key && !empty($brochures)): ?>
                         <div class="flex flex-wrap gap-2">
@@ -263,10 +299,52 @@ try {
                     <?php endif; ?>
                 </div>
 
+                <!-- Filter Form -->
+                <form method="GET" class="px-6 py-4 bg-slate-900/40 border-b border-slate-800/80 flex flex-wrap gap-4 items-center">
+                    <div class="flex flex-col min-w-[150px]">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Market</label>
+                        <select name="market_id" class="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2 outline-none focus:border-red-500 transition">
+                            <option value="all">Tüm Marketler</option>
+                            <?php foreach ($markets_list as $m): ?>
+                                <option value="<?= $m['id'] ?>" <?= $market_filter_id === (int)$m['id'] ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($m['name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="flex flex-col min-w-[150px]">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Durum / Tarih</label>
+                        <select name="filter" class="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2 outline-none focus:border-red-500 transition">
+                            <option value="active" <?= $filter === 'active' ? 'selected' : '' ?>>Aktif Broşürler</option>
+                            <option value="expired" <?= $filter === 'expired' ? 'selected' : '' ?>>Süresi Geçmiş Broşürler</option>
+                            <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>Tüm Broşürler</option>
+                        </select>
+                    </div>
+
+                    <div class="flex flex-col flex-1 min-w-[200px]">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Arama</label>
+                        <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Broşür adı veya market..." 
+                               class="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2 outline-none focus:border-red-500 transition">
+                    </div>
+
+                    <div class="flex items-end self-stretch pb-0.5">
+                        <button type="submit" class="bg-red-600 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition flex items-center gap-1.5 h-[34px]">
+                            <span class="material-symbols-outlined text-sm">filter_list</span>
+                            Filtrele
+                        </button>
+                        <?php if ($market_filter_id !== null || $filter !== 'active' || $search !== ''): ?>
+                            <a href="analyze_brochures.php" class="ml-2 text-slate-400 hover:text-slate-200 text-xs flex items-center gap-1 h-[34px] px-2">
+                                Sıfırla
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </form>
+
                 <?php if (empty($brochures)): ?>
                     <div class="px-6 py-16 text-center text-slate-500">
                         <span class="material-symbols-outlined text-5xl mb-2 block text-slate-600">find_in_page</span>
-                        Aktif veya yayındaki broşür bulunamadı.
+                        Aradığınız kriterlere uygun broşür bulunamadı.
                     </div>
                 <?php else: ?>
                     <div class="overflow-x-auto">
