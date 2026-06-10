@@ -7,6 +7,7 @@ $files = [
     'config.php' => 'config.php',
     'viewer.php' => 'viewer.php',
     'admin/analyze_brochures.php' => 'admin/analyze_brochures.php',
+    'admin/test_key.php' => 'admin/test_key.php',
     'admin/index.php' => 'admin/index.php',
     'admin/apply_scrapers.php' => 'admin/apply_scrapers.php',
     'api/analyze_page.php' => 'api/analyze_page.php',
