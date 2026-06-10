@@ -25,7 +25,7 @@ if (!$gemini_key) {
 echo "<p><b>Kayıtlı Anahtar:</b> <code style='background:#f1f5f9;padding:3px 6px;border-radius:4px;'>" . htmlspecialchars(substr($gemini_key, 0, 8) . str_repeat('•', 24) . substr($gemini_key, -6)) . "</code></p>";
 echo "<p>Google API sunucularına test isteği gönderiliyor...</p>";
 
-$api_url  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={$gemini_key}";
+$api_url  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={$gemini_key}";
 $payload  = json_encode([
     'contents' => [[
         'parts' => [['text' => 'Merhaba, bu bir test mesajıdır. Tek kelimeyle "Aktif" de.']]
