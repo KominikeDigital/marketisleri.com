@@ -152,11 +152,20 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
     <!-- Typography & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" media="print" onload="this.media='all'">
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+    </noscript>
     
-    <!-- Compiled Tailwind CSS -->
-    <link rel="stylesheet" href="uploads/tailwind.min.css">
+    <!-- Inlined Tailwind CSS to prevent render-blocking request -->
+    <style>
+        <?php 
+        $css_file = __DIR__ . '/uploads/tailwind.min.css';
+        if (file_exists($css_file)) {
+            echo file_get_contents($css_file);
+        }
+        ?>
+    </style>
     
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
@@ -230,7 +239,7 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
         <div class="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between header-container">
             <a href="index.php" class="flex items-center gap-2">
                 <?php if (file_exists('uploads/logo.png')): ?>
-                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-16 w-auto object-contain logo-img">
+                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-16 w-auto object-contain logo-img" width="128" height="64">
                 <?php else: ?>
                     <span class="font-title text-base font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                         <span class="text-red-600 material-symbols-outlined font-black">receipt_long</span>
@@ -252,11 +261,17 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
         
         <!-- Hero Search Section -->
         <section id="hero-section" class="text-center py-16 bg-gradient-to-tr from-slate-950 via-red-950 to-slate-950 rounded-3xl border border-slate-800 relative overflow-hidden px-4 shadow-xl shadow-red-950/10">
-            <!-- Video Background -->
+            <!-- Video Background (dynamically loaded on desktop to save mobile bandwidth) -->
             <?php if (file_exists('uploads/hero.mp4')): ?>
-                <video autoplay muted loop playsinline preload="none" class="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none mix-blend-lighten hidden md:block">
-                    <source src="uploads/hero.mp4" type="video/mp4">
-                </video>
+                <div id="hero-video-container" class="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none mix-blend-lighten hidden md:block"></div>
+                <script>
+                    if (window.innerWidth >= 768) {
+                        const videoContainer = document.getElementById('hero-video-container');
+                        if (videoContainer) {
+                            videoContainer.innerHTML = '<video autoplay muted loop playsinline class="w-full h-full object-cover"><source src="uploads/hero.mp4" type="video/mp4"></video>';
+                        }
+                    }
+                </script>
             <?php endif; ?>
 
             <!-- Glowing backdrops (Drifting Ambient) -->
@@ -355,7 +370,8 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
                             <?php if ($m['logo']): ?>
                                 <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
                                      class="w-full h-full object-contain rounded-full" 
-                                     alt="<?= htmlspecialchars($m['name']) ?>">
+                                     alt="<?= htmlspecialchars($m['name']) ?>"
+                                     width="64" height="64">
                             <?php else: ?>
                                 <div class="w-full h-full bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-bold text-xs">
                                     <?= substr($m['name'], 0, 3) ?>
@@ -489,7 +505,7 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
                                 <!-- Market logo overlay in bottom left corner -->
                                 <div class="absolute bottom-3 left-3 bg-white border border-slate-100 rounded-xl p-1.5 shadow-md flex items-center justify-center w-11 h-11">
                                     <?php if ($b['market_logo']): ?>
-                                        <img src="uploads/markets/<?= htmlspecialchars($b['market_logo']) ?>" class="w-full h-full object-contain rounded" alt="Logo">
+                                        <img src="uploads/markets/<?= htmlspecialchars($b['market_logo']) ?>" class="w-full h-full object-contain rounded" alt="Logo" width="44" height="44">
                                     <?php else: ?>
                                         <div class="text-[10px] font-bold text-slate-400">LOG</div>
                                     <?php endif; ?>
@@ -506,7 +522,7 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
                                 </div>
                                 
                                 <div class="flex justify-between items-center border-t border-slate-100 pt-4 text-xs">
-                                    <span class="text-slate-400 font-semibold flex items-center gap-1">
+                                    <span class="text-slate-600 font-semibold flex items-center gap-1">
                                         <span class="material-symbols-outlined text-sm">date_range</span>
                                         <?= date('d.m.Y', strtotime($b['start_date'])) ?> - <?= date('d.m.Y', strtotime($b['end_date'])) ?>
                                     </span>
@@ -559,7 +575,7 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
             <div class="flex flex-col items-center md:items-start gap-2">
                 <a href="index.php">
                     <?php if (file_exists('uploads/logo.png')): ?>
-                        <img src="uploads/logo.png" alt="marketisleri.com" class="h-20 w-auto object-contain">
+                        <img src="uploads/logo.png" alt="marketisleri.com" class="h-20 w-auto object-contain" width="160" height="80">
                     <?php else: ?>
                         <span class="font-title text-lg font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                             <span class="text-red-600 material-symbols-outlined font-black">receipt_long</span>

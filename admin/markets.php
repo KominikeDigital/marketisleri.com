@@ -56,6 +56,8 @@ if (isset($_POST['save'])) {
                 
                 if (!move_uploaded_file($file_tmp, $dest_path)) {
                     $error = "Logo yüklenirken bir hata oluştu.";
+                } else {
+                    compress_and_resize_image($dest_path, 200, 75);
                 }
             } else {
                 $error = "Geçersiz logo formatı. Sadece PNG, JPG, JPEG, SVG ve WEBP kabul edilir.";

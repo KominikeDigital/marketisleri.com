@@ -27,7 +27,34 @@ if (!is_file($htaccess_path)) {
         "        Order allow,deny\n" .
         "        Deny from all\n" .
         "    </IfModule>\n" .
-        "</FilesMatch>\n";
+        "</FilesMatch>\n\n" .
+        "<IfModule mod_expires.c>\n" .
+        "    ExpiresActive On\n" .
+        "    ExpiresDefault \"access plus 1 month\"\n" .
+        "    ExpiresByType text/css \"access plus 1 month\"\n" .
+        "    ExpiresByType application/javascript \"access plus 1 month\"\n" .
+        "    ExpiresByType text/javascript \"access plus 1 month\"\n" .
+        "    ExpiresByType image/jpeg \"access plus 1 month\"\n" .
+        "    ExpiresByType image/png \"access plus 1 month\"\n" .
+        "    ExpiresByType image/gif \"access plus 1 month\"\n" .
+        "    ExpiresByType image/webp \"access plus 1 month\"\n" .
+        "    ExpiresByType image/svg+xml \"access plus 1 month\"\n" .
+        "    ExpiresByType image/x-icon \"access plus 1 month\"\n" .
+        "    ExpiresByType video/mp4 \"access plus 1 month\"\n" .
+        "    ExpiresByType video/webm \"access plus 1 month\"\n" .
+        "    ExpiresByType font/woff2 \"access plus 1 year\"\n" .
+        "    ExpiresByType font/woff \"access plus 1 year\"\n" .
+        "    ExpiresByType font/ttf \"access plus 1 year\"\n" .
+        "    ExpiresByType font/otf \"access plus 1 year\"\n" .
+        "</IfModule>\n\n" .
+        "<IfModule mod_headers.c>\n" .
+        "    <FilesMatch \"\\.(css|js|jpe?g|png|gif|webp|svg|ico|mp4|webm|woff2?|ttf|otf)$\">\n" .
+        "        Header set Cache-Control \"public, max-age=2592000, immutable\"\n" .
+        "    </FilesMatch>\n" .
+        "    <FilesMatch \"\\.(woff2?|ttf|otf)$\">\n" .
+        "        Header set Cache-Control \"public, max-age=31536000, immutable\"\n" .
+        "    </FilesMatch>\n" .
+        "</IfModule>\n";
     @file_put_contents($htaccess_path, $htaccess_content);
 }
 
@@ -782,4 +809,104 @@ function send_email_notification($to, $subject, $message, $pdo) {
 
 // Execute cleanup
 cleanup_expired_brochures($pdo);
+
+// GD Image Compression and Resizing Helper
+function compress_and_resize_image($file_path, $max_width = 800, $quality = 75) {
+    if (!file_exists($file_path)) {
+        return false;
+    }
+    
+    // Check if GD is installed
+    if (!extension_loaded('gd')) {
+        return false;
+    }
+    
+    $info = getimagesize($file_path);
+    if ($info === false) {
+        return false;
+    }
+    
+    $mime = $info['mime'];
+    $width = $info[0];
+    $height = $info[1];
+    
+    // Check if resizing is needed
+    $new_width = $width;
+    $new_height = $height;
+    if ($width > $max_width) {
+        $new_width = $max_width;
+        $new_height = round(($height / $width) * $max_width);
+    } else {
+        // Even if not resized, compress it to optimize size
+        $new_width = $width;
+        $new_height = $height;
+    }
+    
+    // Load image
+    switch ($mime) {
+        case 'image/jpeg':
+            $src_image = @imagecreatefromjpeg($file_path);
+            break;
+        case 'image/png':
+            $src_image = @imagecreatefrompng($file_path);
+            break;
+        case 'image/gif':
+            $src_image = @imagecreatefromgif($file_path);
+            break;
+        case 'image/webp':
+            if (function_exists('imagecreatefromwebp')) {
+                $src_image = @imagecreatefromwebp($file_path);
+            } else {
+                $src_image = false;
+            }
+            break;
+        default:
+            return false;
+    }
+    
+    if (!$src_image) {
+        return false;
+    }
+    
+    // Create new blank image
+    $dst_image = imagecreatetruecolor($new_width, $new_height);
+    
+    // Preserve transparency for PNG, WEBP and GIF
+    if ($mime == 'image/png' || $mime == 'image/gif' || $mime == 'image/webp') {
+        imagealphablending($dst_image, false);
+        imagesavealpha($dst_image, true);
+        $transparent = imagecolorallocatealpha($dst_image, 255, 255, 255, 127);
+        imagefilledrectangle($dst_image, 0, 0, $new_width, $new_height, $transparent);
+    }
+    
+    // Resize
+    imagecopyresampled($dst_image, $src_image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+    
+    // Save image (overwrite original)
+    $success = false;
+    switch ($mime) {
+        case 'image/jpeg':
+            $success = @imagejpeg($dst_image, $file_path, $quality);
+            break;
+        case 'image/png':
+            $png_quality = round((100 - $quality) / 10);
+            if ($png_quality > 9) $png_quality = 9;
+            if ($png_quality < 0) $png_quality = 0;
+            $success = @imagepng($dst_image, $file_path, $png_quality);
+            break;
+        case 'image/gif':
+            $success = @imagegif($dst_image, $file_path);
+            break;
+        case 'image/webp':
+            if (function_exists('imagewebp')) {
+                $success = @imagewebp($dst_image, $file_path, $quality);
+            }
+            break;
+    }
+    
+    imagedestroy($src_image);
+    imagedestroy($dst_image);
+    
+    return $success;
+}
 ?>

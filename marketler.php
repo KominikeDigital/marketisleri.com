@@ -49,11 +49,20 @@ $markets = $pdo->query("
     <!-- Typography & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" media="print" onload="this.media='all'">
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+    </noscript>
     
-    <!-- Pre-compiled Tailwind CSS -->
-    <link rel="stylesheet" href="uploads/tailwind.min.css">
+    <!-- Inlined Tailwind CSS to prevent render-blocking request -->
+    <style>
+        <?php 
+        $css_file = __DIR__ . '/uploads/tailwind.min.css';
+        if (file_exists($css_file)) {
+            echo file_get_contents($css_file);
+        }
+        ?>
+    </style>
     
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
@@ -118,7 +127,7 @@ $markets = $pdo->query("
         <div class="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between header-container">
             <a href="index.php" class="flex items-center gap-2">
                 <?php if (file_exists('uploads/logo.png')): ?>
-                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-16 w-auto object-contain logo-img">
+                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-16 w-auto object-contain logo-img" width="128" height="64">
                 <?php else: ?>
                     <span class="font-title text-base font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                         <span class="text-red-600 material-symbols-outlined font-black">receipt_long</span>
@@ -194,6 +203,7 @@ $markets = $pdo->query("
                                 <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
                                      class="market-logo-img rounded-lg md:rounded-xl" 
                                      alt="<?= htmlspecialchars($m['name']) ?>"
+                                     width="120" height="120"
                                      onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'80\'><rect width=\'80\' height=\'80\' fill=\'%23f8fafc\'/><text x=\'50%%27 y=\'50%%27 dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'14\' font-weight=\'bold\' fill=\'%23cbd5e1\'><?= substr(htmlspecialchars($m['name']), 0, 3) ?></text></svg>'">
                             <?php else: ?>
                                 <div class="w-full h-full bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 font-bold text-lg">
@@ -243,7 +253,7 @@ $markets = $pdo->query("
             <div class="flex flex-col items-center md:items-start gap-2">
                 <a href="index.php">
                     <?php if (file_exists('uploads/logo.png')): ?>
-                        <img src="uploads/logo.png" alt="marketisleri.com" class="h-20 w-auto object-contain">
+                        <img src="uploads/logo.png" alt="marketisleri.com" class="h-20 w-auto object-contain" width="160" height="80">
                     <?php else: ?>
                         <span class="font-title text-lg font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                             <span class="text-red-600 material-symbols-outlined font-black">receipt_long</span>

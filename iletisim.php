@@ -58,11 +58,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- Typography & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" media="print" onload="this.media='all'">
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+    </noscript>
     
-    <!-- Compiled Tailwind CSS -->
-    <link rel="stylesheet" href="uploads/tailwind.min.css">
+    <!-- Inlined Tailwind CSS to prevent render-blocking request -->
+    <style>
+        <?php 
+        $css_file = __DIR__ . '/uploads/tailwind.min.css';
+        if (file_exists($css_file)) {
+            echo file_get_contents($css_file);
+        }
+        ?>
+    </style>
     
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
@@ -110,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between header-container">
             <a href="index.php" class="flex items-center gap-2">
                 <?php if (file_exists('uploads/logo.png')): ?>
-                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-16 w-auto object-contain logo-img">
+                    <img src="uploads/logo.png" alt="marketisleri.com" class="h-16 w-auto object-contain logo-img" width="128" height="64">
                 <?php else: ?>
                     <span class="font-title text-base font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                         <span class="text-red-600 material-symbols-outlined font-black">receipt_long</span>
@@ -279,7 +288,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="flex flex-col items-center md:items-start gap-2">
                 <a href="index.php">
                     <?php if (file_exists('uploads/logo.png')): ?>
-                        <img src="uploads/logo.png" alt="marketisleri.com" class="h-20 w-auto object-contain">
+                        <img src="uploads/logo.png" alt="marketisleri.com" class="h-20 w-auto object-contain" width="160" height="80">
                     <?php else: ?>
                         <span class="font-title text-lg font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                             <span class="text-red-600 material-symbols-outlined font-black">receipt_long</span>

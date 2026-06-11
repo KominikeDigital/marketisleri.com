@@ -168,6 +168,7 @@ if (isset($_POST['import'])) {
                 if (in_array($file_ext, ['png', 'jpg', 'jpeg', 'webp'])) {
                     $cover_name = 'cover-' . time() . '-' . rand(100, 999) . '.' . $file_ext;
                     move_uploaded_file($file_tmp, '../uploads/brochures/' . $cover_name);
+                    compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
                 }
             }
             
@@ -195,12 +196,14 @@ if (isset($_POST['import'])) {
                     if (!downloadFile($import_url, $img_dest)) {
                         throw new Exception("Görsel linkinden resim indirilemedi: " . htmlspecialchars($import_url));
                     }
+                    compress_and_resize_image($img_dest, 1000, 75);
                     $pages_to_insert[] = $img_filename;
                     
                     // If no cover uploaded, use this image as cover too
                     if (empty($cover_name)) {
                         $cover_name = 'cover-magic-' . time() . '.' . $file_ext;
                         copy($img_dest, '../uploads/brochures/' . $cover_name);
+                        compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
                     }
                 } 
                 // Web Page Scraper
@@ -224,12 +227,14 @@ if (isset($_POST['import'])) {
                         $img_dest = '../uploads/brochures/pages/' . $img_filename;
                         
                         if (downloadFile($img_url, $img_dest)) {
+                            compress_and_resize_image($img_dest, 1000, 75);
                             $pages_to_insert[] = $img_filename;
                             
                             // Set cover if none exists
                             if (empty($cover_name) && $page_num === 1) {
                                 $cover_name = 'cover-magic-' . $timestamp . '.' . $file_ext;
                                 copy($img_dest, '../uploads/brochures/' . $cover_name);
+                                compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
                             }
                             $page_num++;
                         }
@@ -285,12 +290,14 @@ if (isset($_POST['import'])) {
                         $img_dest = '../uploads/brochures/pages/' . $img_filename;
                         
                         if (move_uploaded_file($file['tmp_name'], $img_dest)) {
+                            compress_and_resize_image($img_dest, 1000, 75);
                             $pages_to_insert[] = $img_filename;
                             
                             // Set cover if none exists
                             if (empty($cover_name) && $page_num === 1) {
                                 $cover_name = 'cover-magic-' . $timestamp . '.' . $file_ext;
                                 copy($img_dest, '../uploads/brochures/' . $cover_name);
+                                compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
                             }
                             $page_num++;
                         }
@@ -312,6 +319,7 @@ if (isset($_POST['import'])) {
                     $m_logo_ext = pathinfo($market['logo'], PATHINFO_EXTENSION);
                     $cover_name = 'cover-logo-magic-' . time() . '.' . $m_logo_ext;
                     copy('../uploads/markets/' . $market['logo'], '../uploads/brochures/' . $cover_name);
+                    compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
                 } else {
                     $cover_name = 'default_cover.png'; // final fallback
                 }

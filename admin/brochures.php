@@ -39,6 +39,7 @@ if (isset($_POST['save'])) {
                 
                 $cover_name = 'cover-' . time() . '-' . rand(100, 999) . '.' . $file_ext;
                 move_uploaded_file($file_tmp, '../uploads/brochures/' . $cover_name);
+                compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
             } else {
                 $error = "Kapak görseli formatı geçersiz. Sadece PNG, JPG, JPEG, WEBP yüklenebilir.";
             }
@@ -150,6 +151,7 @@ if (isset($_POST['save'])) {
                             if (in_array($file_ext, ['png', 'jpg', 'jpeg', 'webp'])) {
                                 $page_img_name = 'page-' . $brochure_id . '-' . $page_num . '-' . time() . '.' . $file_ext;
                                 move_uploaded_file($file['tmp_name'], '../uploads/brochures/pages/' . $page_img_name);
+                                compress_and_resize_image('../uploads/brochures/pages/' . $page_img_name, 1000, 75);
                                 
                                 $insert_page_stmt->execute([$brochure_id, $page_num, $page_img_name]);
                                 $page_num++;
