@@ -301,7 +301,7 @@ $brochures = $stmt->fetchAll();
                             <div class="relative aspect-[3/4] bg-slate-900/5 overflow-hidden">
                                 <img src="uploads/brochures/<?= htmlspecialchars($b['cover_image']) ?>" 
                                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                     alt="<?= htmlspecialchars($b['title']) ?>"
+                                     alt=""
                                      <?= $lazyLoading ?>
                                      onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'100\'><rect width=\'80\' height=\'100\' fill=\'%23f1f5f9\'/><text x=\'50%%27 y=\'50%%27 dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'10\' fill=\'%2394a3b8\'>RESİM YOK</text></svg>'">
                                 
@@ -319,7 +319,7 @@ $brochures = $stmt->fetchAll();
                                         } elseif ($days <= 3) {
                                             echo '<span class="bg-red-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-red-600/20 tracking-wider">SON ' . $days . ' GÜN!</span>';
                                         } else {
-                                            echo '<span class="bg-emerald-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-emerald-600/10 tracking-wider">AKTİF</span>';
+                                            echo '<span class="bg-emerald-800 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-emerald-800/10 tracking-wider">AKTİF</span>';
                                         }
                                     } elseif ($selected_tab === 'upcoming') {
                                         $diff = strtotime($b['start_date']) - strtotime($today);

@@ -468,7 +468,7 @@ if (!$is_pdf && !empty($pages)) {
                     <div class="flex items-center gap-3">
                         <div class="w-14 h-14 rounded-2xl border border-slate-100 p-1 flex items-center justify-center shrink-0 shadow-sm bg-white">
                             <?php if ($brochure['market_logo']): ?>
-                                <img src="uploads/markets/<?= htmlspecialchars($brochure['market_logo']) ?>" class="w-full h-full object-contain rounded-lg" alt="Market Logo">
+                                <img src="uploads/markets/<?= htmlspecialchars($brochure['market_logo']) ?>" class="w-full h-full object-contain rounded-lg" alt="">
                             <?php else: ?>
                                 <span class="material-symbols-outlined text-slate-400 text-2xl">storefront</span>
                             <?php endif; ?>

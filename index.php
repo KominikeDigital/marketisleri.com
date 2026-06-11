@@ -261,16 +261,18 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
         
         <!-- Hero Search Section -->
         <section id="hero-section" class="text-center py-16 bg-gradient-to-tr from-slate-950 via-red-950 to-slate-950 rounded-3xl border border-slate-800 relative overflow-hidden px-4 shadow-xl shadow-red-950/10">
-            <!-- Video Background (dynamically loaded on desktop to save mobile bandwidth) -->
+            <!-- Video Background (dynamically loaded on desktop after page load to save initial bandwidth) -->
             <?php if (file_exists('uploads/hero.mp4')): ?>
                 <div id="hero-video-container" class="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none mix-blend-lighten hidden md:block"></div>
                 <script>
-                    if (window.innerWidth >= 768) {
-                        const videoContainer = document.getElementById('hero-video-container');
-                        if (videoContainer) {
-                            videoContainer.innerHTML = '<video autoplay muted loop playsinline class="w-full h-full object-cover"><source src="uploads/hero.mp4" type="video/mp4"></video>';
+                    window.addEventListener('load', () => {
+                        if (window.innerWidth >= 768) {
+                            const videoContainer = document.getElementById('hero-video-container');
+                            if (videoContainer) {
+                                videoContainer.innerHTML = '<video autoplay muted loop playsinline class="w-full h-full object-cover"><source src="uploads/hero.mp4" type="video/mp4"></video>';
+                            }
                         }
-                    }
+                    });
                 </script>
             <?php endif; ?>
 
@@ -368,10 +370,10 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
                        class="flex flex-col items-center gap-2 shrink-0 group">
                         <div class="w-16 h-16 rounded-full border border-slate-200 bg-white flex items-center justify-center p-1 shadow-sm transition-all group-hover:scale-110 group-hover:border-red-600/50">
                             <?php if ($m['logo']): ?>
-                                <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
-                                     class="w-full h-full object-contain rounded-full" 
-                                     alt="<?= htmlspecialchars($m['name']) ?>"
-                                     width="64" height="64">
+                                 <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
+                                      class="w-full h-full object-contain rounded-full" 
+                                      alt=""
+                                      width="64" height="64">
                             <?php else: ?>
                                 <div class="w-full h-full bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-bold text-xs">
                                     <?= substr($m['name'], 0, 3) ?>
@@ -458,7 +460,7 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
                             <div class="relative aspect-[3/4] bg-slate-900/5 overflow-hidden">
                                 <img src="uploads/brochures/<?= htmlspecialchars($b['cover_image']) ?>" 
                                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                     alt="<?= htmlspecialchars($b['title']) ?>"
+                                     alt=""
                                      <?= $lazyLoading ?>
                                      onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'100\'><rect width=\'80\' height=\'100\' fill=\'%23f1f5f9\'/><text x=\'50%%27 y=\'50%%27 dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'10\' fill=\'%2394a3b8\'>RESİM YOK</text></svg>'">
                                 
@@ -476,7 +478,7 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
                                         } elseif ($days <= 3) {
                                             echo '<span class="bg-red-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-red-600/20 tracking-wider">SON ' . $days . ' GÜN!</span>';
                                         } else {
-                                            echo '<span class="bg-emerald-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-emerald-600/10 tracking-wider">AKTİF</span>';
+                                             echo '<span class="bg-emerald-800 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-emerald-800/10 tracking-wider">AKTİF</span>';
                                         }
                                     } elseif ($selected_tab === 'upcoming') {
                                         $diff = strtotime($b['start_date']) - strtotime($today);
@@ -505,7 +507,7 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
                                 <!-- Market logo overlay in bottom left corner -->
                                 <div class="absolute bottom-3 left-3 bg-white border border-slate-100 rounded-xl p-1.5 shadow-md flex items-center justify-center w-11 h-11">
                                     <?php if ($b['market_logo']): ?>
-                                        <img src="uploads/markets/<?= htmlspecialchars($b['market_logo']) ?>" class="w-full h-full object-contain rounded" alt="Logo" width="44" height="44">
+                                        <img src="uploads/markets/<?= htmlspecialchars($b['market_logo']) ?>" class="w-full h-full object-contain rounded" alt="" width="44" height="44">
                                     <?php else: ?>
                                         <div class="text-[10px] font-bold text-slate-400">LOG</div>
                                     <?php endif; ?>

@@ -202,7 +202,7 @@ $markets = $pdo->query("
                             <?php if ($m['logo']): ?>
                                 <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
                                      class="market-logo-img rounded-lg md:rounded-xl" 
-                                     alt="<?= htmlspecialchars($m['name']) ?>"
+                                     alt=""
                                      width="120" height="120"
                                      onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'80\'><rect width=\'80\' height=\'80\' fill=\'%23f8fafc\'/><text x=\'50%%27 y=\'50%%27 dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'14\' font-weight=\'bold\' fill=\'%23cbd5e1\'><?= substr(htmlspecialchars($m['name']), 0, 3) ?></text></svg>'">
                             <?php else: ?>
