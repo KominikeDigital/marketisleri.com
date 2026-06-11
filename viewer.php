@@ -328,6 +328,7 @@ if (!$is_pdf && !empty($pages)) {
             <nav class="flex items-center gap-6 text-sm font-bold text-slate-600">
                 <a href="index.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">home</span>Anasayfa</a>
                 <a href="marketler.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">storefront</span>Marketler</a>
+                <a href="iletisim.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">mail</span>İletişim</a>
             </nav>
         </div>
     </header>
@@ -594,6 +595,7 @@ if (!$is_pdf && !empty($pages)) {
                 <a href="gizlilik-politikasi.php" class="hover:text-red-600 transition">Gizlilik Politikası</a>
                 <a href="kullanim-kosullari.php" class="hover:text-red-600 transition">Kullanım Koşulları</a>
                 <a href="cerez-politikasi.php" class="hover:text-red-600 transition">Çerez Politikası</a>
+                <a href="iletisim.php" class="hover:text-red-600 transition font-bold">İletişim</a>
             </div>
             <?php if (!empty($social_settings['social_facebook']) || !empty($social_settings['social_instagram']) || !empty($social_settings['social_twitter']) || !empty($social_settings['social_youtube'])): ?>
                 <div class="flex gap-4 my-4 md:my-0">

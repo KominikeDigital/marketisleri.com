@@ -130,6 +130,7 @@ $markets = $pdo->query("
             <nav class="flex items-center gap-6 text-sm font-bold text-slate-600">
                 <a href="index.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">home</span>Anasayfa</a>
                 <a href="marketler.php" class="text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">storefront</span>Marketler</a>
+                <a href="iletisim.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">mail</span>İletişim</a>
             </nav>
         </div>
     </header>
@@ -253,11 +254,11 @@ $markets = $pdo->query("
                 <p class="text-slate-400 text-xs">En güncel aktüel ürün katalogları tek adreste.</p>
             </div>
 
-            <!-- Legal Links -->
             <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-500 font-medium my-4 md:my-0">
                 <a href="gizlilik-politikasi.php" class="hover:text-red-600 transition">Gizlilik Politikası</a>
                 <a href="kullanim-kosullari.php" class="hover:text-red-600 transition">Kullanım Koşulları</a>
                 <a href="cerez-politikasi.php" class="hover:text-red-600 transition">Çerez Politikası</a>
+                <a href="iletisim.php" class="hover:text-red-600 transition">İletişim</a>
             </div>
 
             <div class="text-slate-400 text-xs text-center md:text-right space-y-1">
