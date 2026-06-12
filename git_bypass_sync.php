@@ -59,7 +59,8 @@ $files = [
     'admin/auto_scraper.php' => 'admin/auto_scraper.php',
     'admin/merge_duplicate_markets.php' => 'admin/merge_duplicate_markets.php',
     'admin/debug_db.php' => 'admin/debug_db.php',
-    'admin/check_db_public.php' => 'admin/check_db_public.php'
+    'admin/check_db_public.php' => 'admin/check_db_public.php',
+    'run_git_reset.php' => 'run_git_reset.php'
 ];
 
 $repo_base = "https://raw.githubusercontent.com/KominikeDigital/marketisleri.com/main/";
