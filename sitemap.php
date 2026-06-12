@@ -52,7 +52,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
     <!-- Dynamic Brochure Viewer Pages -->
     <?php
     try {
-        $brochures_stmt = $pdo->query("SELECT id, created_at FROM brochures ORDER BY created_at DESC");
+        $brochures_stmt = $pdo->query("SELECT id, created_at FROM brochures WHERE show_on_homepage = 1 ORDER BY created_at DESC");
         while ($brochure = $brochures_stmt->fetch()) {
             $lastmod = !empty($brochure['created_at']) ? date('Y-m-d', strtotime($brochure['created_at'])) : date('Y-m-d');
             ?>

@@ -40,16 +40,19 @@ if ($selected_tab === 'upcoming') {
     $params[] = $today;
 }
 
+// Filter to only show visible brochures on homepage
+$conditions[] = "b.show_on_homepage = 1";
+
 // Limit homepage to 1 newest brochure per market (based on the current tab's condition)
-$subquery_cond = "";
+$subquery_cond = "AND b2.show_on_homepage = 1";
 if ($selected_tab === 'upcoming') {
-    $subquery_cond = "AND b2.start_date > '$today'";
+    $subquery_cond .= " AND b2.start_date > '$today'";
 } elseif ($selected_tab === 'expired') {
-    $subquery_cond = "AND b2.end_date < '$today'";
+    $subquery_cond .= " AND b2.end_date < '$today'";
 } elseif ($selected_tab === 'ending_soon') {
-    $subquery_cond = "AND b2.start_date <= '$today' AND b2.end_date >= '$today' AND b2.end_date <= '" . date('Y-m-d', strtotime('+1 day')) . "'";
+    $subquery_cond .= " AND b2.start_date <= '$today' AND b2.end_date >= '$today' AND b2.end_date <= '" . date('Y-m-d', strtotime('+1 day')) . "'";
 } else { // active
-    $subquery_cond = "AND b2.start_date <= '$today' AND b2.end_date >= '$today'";
+    $subquery_cond .= " AND b2.start_date <= '$today' AND b2.end_date >= '$today'";
 }
 $conditions[] = "b.id = (SELECT b2.id FROM brochures b2 WHERE b2.market_id = b.market_id $subquery_cond ORDER BY b2.start_date DESC, b2.created_at DESC LIMIT 1)";
 

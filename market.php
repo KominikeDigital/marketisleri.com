@@ -30,7 +30,7 @@ $selected_tab = $_GET['tab'] ?? 'active';
 $search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
 
 // Build conditions
-$conditions = ["b.market_id = ?"];
+$conditions = ["b.market_id = ?", "b.show_on_homepage = 1"];
 $params = [$market['id']];
 
 // Tab condition

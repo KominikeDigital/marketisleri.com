@@ -128,6 +128,7 @@ if (isset($_POST['import'])) {
     $start_date = trim($_POST['start_date'] ?? '');
     $end_date = trim($_POST['end_date'] ?? '');
     $import_url = trim($_POST['import_url'] ?? '');
+    $show_on_homepage = isset($_POST['show_on_homepage']) ? 1 : 0;
     
     if ($market_id === 0) {
         $error = "Lütfen bir market seçin.";
@@ -168,7 +169,7 @@ if (isset($_POST['import'])) {
                 if (in_array($file_ext, ['png', 'jpg', 'jpeg', 'webp'])) {
                     $cover_name = 'cover-' . time() . '-' . rand(100, 999) . '.' . $file_ext;
                     move_uploaded_file($file_tmp, '../uploads/brochures/' . $cover_name);
-                    compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
+                    compress_and_resize_image('../uploads/brochures/' . $cover_name, 1000, 85);
                 }
             }
             
@@ -196,14 +197,14 @@ if (isset($_POST['import'])) {
                     if (!downloadFile($import_url, $img_dest)) {
                         throw new Exception("Görsel linkinden resim indirilemedi: " . htmlspecialchars($import_url));
                     }
-                    compress_and_resize_image($img_dest, 1000, 75);
+                    compress_and_resize_image($img_dest, 1200, 85);
                     $pages_to_insert[] = $img_filename;
                     
                     // If no cover uploaded, use this image as cover too
                     if (empty($cover_name)) {
                         $cover_name = 'cover-magic-' . time() . '.' . $file_ext;
                         copy($img_dest, '../uploads/brochures/' . $cover_name);
-                        compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
+                        compress_and_resize_image('../uploads/brochures/' . $cover_name, 1000, 85);
                     }
                 } 
                 // Web Page Scraper
@@ -227,14 +228,14 @@ if (isset($_POST['import'])) {
                         $img_dest = '../uploads/brochures/pages/' . $img_filename;
                         
                         if (downloadFile($img_url, $img_dest)) {
-                            compress_and_resize_image($img_dest, 1000, 75);
+                            compress_and_resize_image($img_dest, 1200, 85);
                             $pages_to_insert[] = $img_filename;
                             
                             // Set cover if none exists
                             if (empty($cover_name) && $page_num === 1) {
                                 $cover_name = 'cover-magic-' . $timestamp . '.' . $file_ext;
                                 copy($img_dest, '../uploads/brochures/' . $cover_name);
-                                compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
+                                compress_and_resize_image('../uploads/brochures/' . $cover_name, 1000, 85);
                             }
                             $page_num++;
                         }
@@ -290,14 +291,14 @@ if (isset($_POST['import'])) {
                         $img_dest = '../uploads/brochures/pages/' . $img_filename;
                         
                         if (move_uploaded_file($file['tmp_name'], $img_dest)) {
-                            compress_and_resize_image($img_dest, 1000, 75);
+                            compress_and_resize_image($img_dest, 1200, 85);
                             $pages_to_insert[] = $img_filename;
                             
                             // Set cover if none exists
                             if (empty($cover_name) && $page_num === 1) {
                                 $cover_name = 'cover-magic-' . $timestamp . '.' . $file_ext;
                                 copy($img_dest, '../uploads/brochures/' . $cover_name);
-                                compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
+                                compress_and_resize_image('../uploads/brochures/' . $cover_name, 1000, 85);
                             }
                             $page_num++;
                         }
@@ -319,7 +320,7 @@ if (isset($_POST['import'])) {
                     $m_logo_ext = pathinfo($market['logo'], PATHINFO_EXTENSION);
                     $cover_name = 'cover-logo-magic-' . time() . '.' . $m_logo_ext;
                     copy('../uploads/markets/' . $market['logo'], '../uploads/brochures/' . $cover_name);
-                    compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
+                    compress_and_resize_image('../uploads/brochures/' . $cover_name, 1000, 85);
                 } else {
                     $cover_name = 'default_cover.png'; // final fallback
                 }
@@ -328,8 +329,8 @@ if (isset($_POST['import'])) {
             // 4. Database Insertion
             $pdo->beginTransaction();
             
-            $stmt = $pdo->prepare("INSERT INTO brochures (market_id, title, cover_image, start_date, end_date, pdf_path) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$market_id, $title, $cover_name, $start_date, $end_date, $pdf_name]);
+            $stmt = $pdo->prepare("INSERT INTO brochures (market_id, title, cover_image, start_date, end_date, pdf_path, show_on_homepage) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$market_id, $title, $cover_name, $start_date, $end_date, $pdf_name, $show_on_homepage]);
             $brochure_id = $pdo->lastInsertId();
             
             if ($content_type === 'images' && !empty($pages_to_insert)) {
@@ -508,6 +509,15 @@ $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
                         <input type="file" id="cover_image" name="cover_image" accept="image/*"
                                class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 text-slate-300 rounded-xl px-4 py-2 outline-none text-sm file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-800 file:text-white hover:file:bg-slate-700">
                         <p class="text-xs text-slate-500 mt-2">Boş bırakılırsa yüklenen görsellerin ilki, PDF'lerde ise market logosu kapak resmi olarak atanır.</p>
+                    </div>
+
+                    <!-- Show on Homepage Checkbox -->
+                    <div>
+                        <label class="flex items-center gap-2 cursor-pointer text-sm">
+                            <input type="checkbox" name="show_on_homepage" value="1" checked
+                                   class="text-red-600 focus:ring-red-500 bg-slate-950 border-slate-800 rounded">
+                            Anasayfada Göster
+                        </label>
                     </div>
 
                     <div class="border-t border-slate-800 pt-6">

@@ -7,6 +7,25 @@ if (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true) {
     exit;
 }
 
+// Handle AJAX Toggle Homepage
+if (isset($_POST['action']) && $_POST['action'] === 'toggle_homepage') {
+    header('Content-Type: application/json');
+    $b_id = intval($_POST['id'] ?? 0);
+    if ($b_id > 0) {
+        $stmt = $pdo->prepare("SELECT show_on_homepage FROM brochures WHERE id = ?");
+        $stmt->execute([$b_id]);
+        $current = $stmt->fetchColumn();
+        $new_val = ($current == 1) ? 0 : 1;
+        
+        $up = $pdo->prepare("UPDATE brochures SET show_on_homepage = ? WHERE id = ?");
+        $up->execute([$new_val, $b_id]);
+        echo json_encode(['success' => true, 'new_val' => $new_val]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Geçersiz ID']);
+    }
+    exit;
+}
+
 $error = null;
 $success = null;
 
@@ -18,6 +37,7 @@ if (isset($_POST['save'])) {
     $start_date = trim($_POST['start_date'] ?? '');
     $end_date = trim($_POST['end_date'] ?? '');
     $content_type = $_POST['content_type'] ?? 'images'; // images or pdf
+    $show_on_homepage = isset($_POST['show_on_homepage']) ? 1 : 0;
 
     if ($market_id === 0 || empty($title) || empty($start_date) || empty($end_date)) {
         $error = "Lütfen tüm gerekli alanları doldurun.";
@@ -39,7 +59,7 @@ if (isset($_POST['save'])) {
                 
                 $cover_name = 'cover-' . time() . '-' . rand(100, 999) . '.' . $file_ext;
                 move_uploaded_file($file_tmp, '../uploads/brochures/' . $cover_name);
-                compress_and_resize_image('../uploads/brochures/' . $cover_name, 600, 75);
+                compress_and_resize_image('../uploads/brochures/' . $cover_name, 1000, 85);
             } else {
                 $error = "Kapak görseli formatı geçersiz. Sadece PNG, JPG, JPEG, WEBP yüklenebilir.";
             }
@@ -53,14 +73,14 @@ if (isset($_POST['save'])) {
 
                 if ($id === null) {
                     // Insert Brochure
-                    $stmt = $pdo->prepare("INSERT INTO brochures (market_id, title, cover_image, start_date, end_date) VALUES (?, ?, ?, ?, ?)");
-                    $stmt->execute([$market_id, $title, $cover_name, $start_date, $end_date]);
+                    $stmt = $pdo->prepare("INSERT INTO brochures (market_id, title, cover_image, start_date, end_date, show_on_homepage) VALUES (?, ?, ?, ?, ?, ?)");
+                    $stmt->execute([$market_id, $title, $cover_name, $start_date, $end_date, $show_on_homepage]);
                     $brochure_id = $pdo->lastInsertId();
                 } else {
                     $brochure_id = $id;
                     // Update Brochure metadata
-                    $stmt = $pdo->prepare("UPDATE brochures SET market_id = ?, title = ?, cover_image = ?, start_date = ?, end_date = ? WHERE id = ?");
-                    $stmt->execute([$market_id, $title, $cover_name, $start_date, $end_date, $brochure_id]);
+                    $stmt = $pdo->prepare("UPDATE brochures SET market_id = ?, title = ?, cover_image = ?, start_date = ?, end_date = ?, show_on_homepage = ? WHERE id = ?");
+                    $stmt->execute([$market_id, $title, $cover_name, $start_date, $end_date, $show_on_homepage, $brochure_id]);
                 }
 
                 // Handle content uploads (PDF vs Images)
@@ -151,7 +171,7 @@ if (isset($_POST['save'])) {
                             if (in_array($file_ext, ['png', 'jpg', 'jpeg', 'webp'])) {
                                 $page_img_name = 'page-' . $brochure_id . '-' . $page_num . '-' . time() . '.' . $file_ext;
                                 move_uploaded_file($file['tmp_name'], '../uploads/brochures/pages/' . $page_img_name);
-                                compress_and_resize_image('../uploads/brochures/pages/' . $page_img_name, 1000, 75);
+                                compress_and_resize_image('../uploads/brochures/pages/' . $page_img_name, 1200, 85);
                                 
                                 $insert_page_stmt->execute([$brochure_id, $page_num, $page_img_name]);
                                 $page_num++;
@@ -305,6 +325,7 @@ $brochures = $brochures_stmt->fetchAll();
                                     <th class="p-4">Tarih Aralığı</th>
                                     <th class="p-4">Tip</th>
                                     <th class="p-4">Durum</th>
+                                    <th class="p-4">Anasayfa</th>
                                     <th class="p-4 pr-6 text-right">İşlemler</th>
                                 </tr>
                             </thead>
@@ -341,6 +362,21 @@ $brochures = $brochures_stmt->fetchAll();
                                                 echo '<span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Aktif</span>';
                                             }
                                             ?>
+                                        </td>
+                                        <td class="p-4">
+                                            <?php if ($b['show_on_homepage'] == 1): ?>
+                                                <button onclick="toggleHomepage(<?= $b['id'] ?>, this)" 
+                                                        class="inline-flex items-center gap-1 text-emerald-500 hover:text-emerald-400 font-bold transition">
+                                                    <span class="material-symbols-outlined text-lg">check_circle</span>
+                                                    Evet
+                                                </button>
+                                            <?php else: ?>
+                                                <button onclick="toggleHomepage(<?= $b['id'] ?>, this)" 
+                                                        class="inline-flex items-center gap-1 text-slate-500 hover:text-slate-400 font-bold transition">
+                                                    <span class="material-symbols-outlined text-lg">cancel</span>
+                                                    Hayır
+                                                </button>
+                                            <?php endif; ?>
                                         </td>
                                         <td class="p-4 pr-6 text-right space-x-3">
                                             <a href="../viewer.php?id=<?= $b['id'] ?>" target="_blank" 
@@ -413,6 +449,14 @@ $brochures = $brochures_stmt->fetchAll();
                         <input type="date" id="form-end-date" name="end_date" required
                                class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition">
                     </div>
+                </div>
+
+                <div>
+                    <label class="flex items-center gap-2 cursor-pointer text-sm">
+                        <input type="checkbox" id="form-show-on-homepage" name="show_on_homepage" value="1" checked
+                               class="text-red-600 focus:ring-red-500 bg-slate-950 border-slate-800 rounded">
+                        Anasayfada Göster
+                    </label>
                 </div>
 
                 <div>
@@ -495,6 +539,7 @@ $brochures = $brochures_stmt->fetchAll();
         const formExistingCover = document.getElementById('form-existing-cover');
         const coverPreviewPlaceholder = document.getElementById('cover-preview-placeholder');
         const coverPreviewImg = document.getElementById('cover-preview-img');
+        const formShowOnHomepage = document.getElementById('form-show-on-homepage');
         
         const groupImages = document.getElementById('input-group-images');
         const groupPdf = document.getElementById('input-group-pdf');
@@ -508,6 +553,7 @@ $brochures = $brochures_stmt->fetchAll();
             formStartDate.value = "";
             formEndDate.value = "";
             formExistingCover.value = "";
+            formShowOnHomepage.checked = true;
             
             coverPreviewImg.src = "";
             coverPreviewImg.classList.add('hidden');
@@ -533,6 +579,7 @@ $brochures = $brochures_stmt->fetchAll();
             formStartDate.value = brochure.start_date;
             formEndDate.value = brochure.end_date;
             formExistingCover.value = brochure.cover_image || "";
+            formShowOnHomepage.checked = (brochure.show_on_homepage == 1);
             
             if (brochure.cover_image) {
                 coverPreviewImg.src = "../uploads/brochures/" + brochure.cover_image;
@@ -575,6 +622,36 @@ $brochures = $brochures_stmt->fetchAll();
             } else {
                 groupImages.classList.remove('hidden');
                 groupPdf.classList.add('hidden');
+            }
+        }
+
+        async function toggleHomepage(id, btn) {
+            const formData = new FormData();
+            formData.append('action', 'toggle_homepage');
+            formData.append('id', id);
+            
+            btn.disabled = true;
+            try {
+                const res = await fetch('brochures.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (data.new_val == 1) {
+                        btn.className = "inline-flex items-center gap-1 text-emerald-500 hover:text-emerald-400 font-bold transition";
+                        btn.innerHTML = '<span class="material-symbols-outlined text-lg">check_circle</span> Evet';
+                    } else {
+                        btn.className = "inline-flex items-center gap-1 text-slate-500 hover:text-slate-400 font-bold transition";
+                        btn.innerHTML = '<span class="material-symbols-outlined text-lg">cancel</span> Hayır';
+                    }
+                } else {
+                    alert('Hata: ' + data.message);
+                }
+            } catch (err) {
+                alert('İşlem gerçekleştirilemedi.');
+            } finally {
+                btn.disabled = false;
             }
         }
     </script>

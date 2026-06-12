@@ -19,8 +19,9 @@ $stmt = $pdo->prepare("SELECT b.*, m.name as market_name, m.logo as market_logo,
 $stmt->execute([$id]);
 $brochure = $stmt->fetch();
 
-if (!$brochure) {
-    die("Broşür bulunamadı! <a href='index.php'>Anasayfaya Dön</a>");
+if (!$brochure || ($brochure['show_on_homepage'] == 0 && (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true))) {
+    header("Location: index.php");
+    exit;
 }
 
 $today = date('Y-m-d');

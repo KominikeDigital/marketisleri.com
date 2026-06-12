@@ -162,6 +162,7 @@ function initialize_database($pdo, $driver) {
                 pdf_path VARCHAR(255) DEFAULT NULL,
                 start_date DATE,
                 end_date DATE,
+                show_on_homepage TINYINT DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_brochures_market FOREIGN KEY (market_id) REFERENCES markets(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
@@ -241,6 +242,7 @@ function initialize_database($pdo, $driver) {
                 pdf_path TEXT,
                 start_date DATE,
                 end_date DATE,
+                show_on_homepage INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (market_id) REFERENCES markets(id) ON DELETE CASCADE
             )",
@@ -436,6 +438,17 @@ try {
 } catch (PDOException $e) {
     try {
         $pdo->exec("ALTER TABLE brochures ADD COLUMN analyzed_at TIMESTAMP NULL DEFAULT NULL");
+    } catch (PDOException $ex) {
+        // Fail silently
+    }
+}
+
+// Database Migrations for Brochure show_on_homepage option
+try {
+    $pdo->query("SELECT show_on_homepage FROM brochures LIMIT 1");
+} catch (PDOException $e) {
+    try {
+        $pdo->exec("ALTER TABLE brochures ADD COLUMN show_on_homepage TINYINT DEFAULT 1");
     } catch (PDOException $ex) {
         // Fail silently
     }
@@ -811,7 +824,7 @@ function send_email_notification($to, $subject, $message, $pdo) {
 cleanup_expired_brochures($pdo);
 
 // GD Image Compression and Resizing Helper
-function compress_and_resize_image($file_path, $max_width = 800, $quality = 75) {
+function compress_and_resize_image($file_path, $max_width = 1000, $quality = 85) {
     if (!file_exists($file_path)) {
         return false;
     }

@@ -418,18 +418,18 @@ function run_scraper(PDO $pdo): array {
             $cover_url  = $cover_url ? resolve_url($cover_url, $url) : '';
             $detail_url = $card_href ? resolve_url($card_href, $url) : '';
 
-            // Fallback: if still no cover, try to get first page from detail page
-            $cover_from_logo = false;
-            if (!$cover_url && $detail_url) {
-                log_line("    ⚠️  [{$ci}] Kapak resmi yok, detay sayfasından deneniyor: {$detail_url}");
-                $detail_pages = fetch_aktuelbrosurler_pages($detail_url);
-                if (!empty($detail_pages)) {
-                    $cover_url = resolve_url($detail_pages[0], $url);
-                    log_line("    -> Detay sayfasından kapak alındı: {$cover_url}");
+            // Fetch detail pages first to get high-resolution images
+            $page_images = [];
+            if ($detail_url) {
+                $page_images = fetch_aktuelbrosurler_pages($detail_url);
+                if (!empty($page_images)) {
+                    $cover_url = resolve_url($page_images[0], $url);
+                    log_line("    -> Detay sayfasından yüksek çözünürlüklü kapak görseli alındı: {$cover_url}");
                 }
             }
 
             // Fallback: use market logo as cover
+            $cover_from_logo = false;
             if (!$cover_url) {
                 if (!empty($market['logo'])) {
                     $logo_src = dirname(__DIR__) . '/uploads/markets/' . $market['logo'];
@@ -460,8 +460,6 @@ function run_scraper(PDO $pdo): array {
             $cover_name = $slug . '_auto_' . $ci . '_cover_' . $ts . '.jpg';
             $cover_dest = $uploads_dir . '/brochures/' . $cover_name;
 
-            $detail_url = $detail_url ?? '';
-
             if ($cover_from_logo) {
                 // Copy market logo as cover
                 $logo_src = dirname(__DIR__) . '/uploads/markets/' . $market['logo'];
@@ -470,27 +468,30 @@ function run_scraper(PDO $pdo): array {
                     log_line("    ❌ Logo kopyalanamadı: {$logo_src}");
                     continue;
                 }
+                compress_and_resize_image($cover_dest, 1000, 85);
                 log_line("    -> Market logosu kapak olarak kopyalandı.");
             } elseif (!download_image($cover_url, $cover_dest, [], $detail_url ?: $url)) {
                 log_line("    ❌ Kapak indirilemedi (HTTP 500 olabilir): {$cover_url}");
                 // Try downloading first page from detail as cover instead
-                if ($detail_url) {
-                    $detail_pages = fetch_aktuelbrosurler_pages($detail_url);
-                    if (!empty($detail_pages) && download_image($detail_pages[0], $cover_dest, [], $detail_url)) {
-                        log_line("    -> Detay sayfasından kapak indirildi.");
-                        $cover_url = $detail_pages[0];
+                if (!empty($page_images)) {
+                    $cover_url = resolve_url($page_images[0], $url);
+                    if (download_image($cover_url, $cover_dest, [], $detail_url)) {
+                        compress_and_resize_image($cover_dest, 1000, 85);
+                        log_line("    -> İlk sayfadan kapak indirildi.");
                     } else {
                         continue;
                     }
                 } else {
                     continue;
                 }
+            } else {
+                compress_and_resize_image($cover_dest, 1000, 85);
             }
 
             // ── Insert brochure record ────────────────────────────────────────
             try {
                 $ins = $pdo->prepare(
-                    "INSERT INTO brochures (market_id, title, cover_image, start_date, end_date) VALUES (?, ?, ?, ?, ?)"
+                    "INSERT INTO brochures (market_id, title, cover_image, start_date, end_date, show_on_homepage) VALUES (?, ?, ?, ?, ?, 1)"
                 );
                 $ins->execute([$market['id'], $title, $cover_name, $start_date, $end_date]);
                 $brochure_id = (int)$pdo->lastInsertId();
@@ -501,10 +502,6 @@ function run_scraper(PDO $pdo): array {
             }
 
             // ── Fetch & download detail pages ─────────────────────────────────
-            $page_images = [];
-            if ($detail_url) {
-                $page_images = fetch_aktuelbrosurler_pages($detail_url);
-            }
             if (empty($page_images)) {
                 $page_images = [$cover_url];
             }
@@ -516,6 +513,7 @@ function run_scraper(PDO $pdo): array {
                 $page_dest = $uploads_dir . '/brochures/pages/' . $page_name;
 
                 if (download_image($page_url, $page_dest)) {
+                    compress_and_resize_image($page_dest, 1200, 85);
                     $pdo->prepare(
                         "INSERT INTO brochure_pages (brochure_id, page_number, image_path) VALUES (?, ?, ?)"
                     )->execute([$brochure_id, $p, $page_name]);
