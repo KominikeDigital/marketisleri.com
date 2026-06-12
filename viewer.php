@@ -321,6 +321,57 @@ if (!$is_pdf && !empty($pages)) {
         .share-wa svg, .share-tg svg, .share-sms svg,
         .share-fb svg, .share-x svg, .share-cp svg { fill: currentColor; }
     </style>
+    <?php if (isset($_GET['embed']) && $_GET['embed'] == 1): ?>
+    <style>
+        header, footer, .mb-6.flex, .ad-banner-container, .right-sidebar {
+            display: none !important;
+        }
+        body {
+            background-color: #0f172a !important; /* slate-900 */
+            color: #f1f5f9 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        main {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        .grid {
+            grid-template-columns: 1fr !important;
+            gap: 1rem !important;
+        }
+        .lg\:col-span-3 {
+            grid-column: span 1 / span 1 !important;
+            width: 100% !important;
+        }
+        .bg-white {
+            background-color: #1e293b !important; /* slate-800 */
+            border-color: #334155 !important; /* slate-700 */
+            color: #f1f5f9 !important;
+        }
+        .text-slate-900, .text-slate-800 {
+            color: #ffffff !important;
+        }
+        .text-slate-600, .text-slate-500, .text-slate-400 {
+            color: #94a3b8 !important; /* slate-400 */
+        }
+        .border-slate-100, .border-slate-200 {
+            border-color: #334155 !important;
+        }
+        #viewer-container {
+            background-color: #020617 !important; /* slate-950 */
+            border-color: #1e293b !important;
+        }
+        #mainImg {
+            border-color: #334155 !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+    <?php endif; ?>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
 
@@ -358,7 +409,7 @@ if (!$is_pdf && !empty($pages)) {
         </div>
 
         <!-- Top Banner Ad -->
-        <div class="w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider mb-6 relative overflow-hidden select-none">
+        <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider mb-6 relative overflow-hidden select-none">
             <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
             <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
             GOOGLE ADSENSE REKLAM ALANI (728x90 veya Esnek)
@@ -455,7 +506,7 @@ if (!$is_pdf && !empty($pages)) {
                 </div>
 
                 <!-- Bottom Banner Ad -->
-                <div class="w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider relative overflow-hidden select-none">
+                <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider relative overflow-hidden select-none">
                     <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
                     <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
                     GOOGLE ADSENSE REKLAM ALANI (728x90 veya Esnek)
@@ -463,7 +514,7 @@ if (!$is_pdf && !empty($pages)) {
             </div>
 
             <!-- Right: Sidebar -->
-            <div class="space-y-6">
+            <div class="right-sidebar space-y-6">
                 <!-- Market info -->
                 <a href="market.php?slug=<?= htmlspecialchars($brochure['market_slug']) ?>" class="block bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition space-y-5 group">
                     <div class="flex items-center gap-3">

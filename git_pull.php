@@ -40,7 +40,7 @@ function run_local_command($cmd) {
     return false;
 }
 
-// Auto-fix .git/config URL
+// Auto-fix .git/config settings (URL, filemode, autocrlf)
 $git_config_path = __DIR__ . '/.git/config';
 $git_config_updated = false;
 $git_config_error = "";
@@ -54,13 +54,47 @@ if (file_exists($git_config_path)) {
             $current_git_url = trim($matches[1]);
         }
         
+        $modified_config = $config_content;
+        $needs_write = false;
+
         // Check if it has the old URL and auto-update
-        if (strpos($config_content, 'marketisler.com.git') !== false) {
-            $new_config = str_replace('marketisler.com.git', 'marketisleri.com.git', $config_content);
-            if (@file_put_contents($git_config_path, $new_config) !== false) {
-                $git_config_updated = true;
-                $current_git_url = str_replace('marketisler.com.git', 'marketisleri.com.git', $current_git_url);
-            } else {
+        if (strpos($modified_config, 'marketisler.com.git') !== false) {
+            $modified_config = str_replace('marketisler.com.git', 'marketisleri.com.git', $modified_config);
+            $needs_write = true;
+            $git_config_updated = true;
+            $current_git_url = str_replace('marketisler.com.git', 'marketisleri.com.git', $current_git_url);
+        }
+
+        // Auto-fix filemode = true -> filemode = false under [core]
+        if (preg_match('/\[core\][^\[]*/i', $modified_config, $core_matches)) {
+            $core_section = $core_matches[0];
+            if (preg_match('/filemode\s*=\s*true/i', $core_section)) {
+                $new_core_section = preg_replace('/filemode\s*=\s*true/i', 'filemode = false', $core_section);
+                $modified_config = str_replace($core_section, $new_core_section, $modified_config);
+                $needs_write = true;
+            } elseif (!preg_match('/filemode\s*=\s*/i', $core_section)) {
+                $new_core_section = rtrim($core_section) . "\n\tfilemode = false";
+                $modified_config = str_replace($core_section, $new_core_section, $modified_config);
+                $needs_write = true;
+            }
+        }
+
+        // Auto-fix autocrlf under [core]
+        if (preg_match('/\[core\][^\[]*/i', $modified_config, $core_matches)) {
+            $core_section = $core_matches[0];
+            if (preg_match('/autocrlf\s*=\s*(true|input)/i', $core_section)) {
+                $new_core_section = preg_replace('/autocrlf\s*=\s*(true|input)/i', 'autocrlf = false', $core_section);
+                $modified_config = str_replace($core_section, $new_core_section, $modified_config);
+                $needs_write = true;
+            } elseif (!preg_match('/autocrlf\s*=\s*/i', $core_section)) {
+                $new_core_section = rtrim($core_section) . "\n\tautocrlf = false";
+                $modified_config = str_replace($core_section, $new_core_section, $modified_config);
+                $needs_write = true;
+            }
+        }
+
+        if ($needs_write) {
+            if (@file_put_contents($git_config_path, $modified_config) === false) {
                 $git_config_error = "Yazma yetkisi yok (Permission Denied).";
             }
         }
@@ -189,14 +223,20 @@ if (file_exists($git_config_path)) {
                     $commands = [];
 
                     if ($action === 'status') {
+                        $commands[] = 'git config core.fileMode false 2>&1';
+                        $commands[] = 'git config core.autocrlf false 2>&1';
                         $commands[] = 'git status 2>&1';
                         $commands[] = 'git branch -a 2>&1';
                         $commands[] = 'git log -n 5 2>&1';
                     } elseif ($action === 'pull') {
+                        $commands[] = 'git config core.fileMode false 2>&1';
+                        $commands[] = 'git config core.autocrlf false 2>&1';
                         $commands[] = 'git fetch origin 2>&1';
                         $commands[] = 'git pull origin main 2>&1';
                         $commands[] = 'git status 2>&1';
                     } elseif ($action === 'force_reset') {
+                        $commands[] = 'git config core.fileMode false 2>&1';
+                        $commands[] = 'git config core.autocrlf false 2>&1';
                         $commands[] = 'git fetch --all 2>&1';
                         $commands[] = 'git reset --hard origin/main 2>&1';
                         $commands[] = 'git status 2>&1';

@@ -197,9 +197,16 @@ $today = date('Y-m-d');
 // Fetch Markets for selection
 $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
 
-// Fetch Brochures
-$brochures_stmt = $pdo->query("SELECT b.*, m.name as market_name FROM brochures b JOIN markets m ON b.market_id = m.id ORDER BY b.created_at DESC");
-$brochures = $brochures_stmt->fetchAll();
+// Fetch Brochures (with optional search filter)
+$search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
+if ($search_query !== '') {
+    $brochures_stmt = $pdo->prepare("SELECT b.*, m.name as market_name FROM brochures b JOIN markets m ON b.market_id = m.id WHERE b.title LIKE ? OR m.name LIKE ? ORDER BY b.created_at DESC");
+    $brochures_stmt->execute(['%' . $search_query . '%', '%' . $search_query . '%']);
+    $brochures = $brochures_stmt->fetchAll();
+} else {
+    $brochures_stmt = $pdo->query("SELECT b.*, m.name as market_name FROM brochures b JOIN markets m ON b.market_id = m.id ORDER BY b.created_at DESC");
+    $brochures = $brochures_stmt->fetchAll();
+}
 
 ?>
 <!DOCTYPE html>
@@ -305,8 +312,19 @@ $brochures = $brochures_stmt->fetchAll();
 
             <!-- Brochures Table -->
             <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
-                <div class="p-6 border-b border-slate-800">
+                <div class="p-6 border-b border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <h3 class="font-title text-xl font-bold text-white">Broşürler Listesi</h3>
+                    <form method="GET" class="flex items-center gap-2 max-w-sm w-full">
+                        <div class="relative w-full">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-500 material-symbols-outlined text-lg">search</span>
+                            <input type="text" name="q" value="<?= htmlspecialchars($search_query) ?>" placeholder="Broşür veya market ara..." 
+                                   class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white text-sm rounded-xl pl-10 pr-4 py-2 outline-none transition">
+                        </div>
+                        <?php if ($search_query !== ''): ?>
+                            <a href="brochures.php" class="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-3 py-2 rounded-xl text-sm transition font-semibold flex items-center">Temizle</a>
+                        <?php endif; ?>
+                        <button type="submit" class="bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-xl text-sm font-semibold transition">Ara</button>
+                    </form>
                 </div>
 
                 <?php if (empty($brochures)): ?>
@@ -379,11 +397,11 @@ $brochures = $brochures_stmt->fetchAll();
                                             <?php endif; ?>
                                         </td>
                                         <td class="p-4 pr-6 text-right space-x-3">
-                                            <a href="../viewer.php?id=<?= $b['id'] ?>" target="_blank" 
+                                            <button onclick="openPreviewModal(<?= $b['id'] ?>)" 
                                                class="inline-flex items-center gap-0.5 text-indigo-400 hover:text-indigo-300 text-xs font-bold transition">
                                                 <span class="material-symbols-outlined text-[14px]">visibility</span>
                                                 Gör
-                                            </a>
+                                            </button>
                                             <button onclick="editBrochure(<?= htmlspecialchars(json_encode($b)) ?>)" 
                                                     class="inline-flex items-center gap-0.5 text-amber-400 hover:text-amber-300 text-xs font-bold transition">
                                                 <span class="material-symbols-outlined text-[14px]">edit</span>
@@ -527,12 +545,30 @@ $brochures = $brochures_stmt->fetchAll();
         </div>
     </div>
 
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+            <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/40 shrink-0">
+                <h3 class="font-title text-lg font-bold text-white">Broşür Önizleme</h3>
+                <button onclick="closePreviewModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">
+                    <span class="material-symbols-outlined text-lg">close</span>
+                </button>
+            </div>
+            <div class="flex-1 bg-slate-950">
+                <iframe id="preview-iframe" src="about:blank" class="w-full h-full border-0"></iframe>
+            </div>
+        </div>
+    </div>
+
     <!-- JS Helper for Modals -->
     <script>
         const modal = document.getElementById('modal');
         const modalTitle = document.getElementById('modal-title');
         const formId = document.getElementById('form-id');
         const formMarket = document.getElementById('form-market');
+        
+        const previewModal = document.getElementById('preview-modal');
+        const previewIframe = document.getElementById('preview-iframe');
         const formTitle = document.getElementById('form-title');
         const formStartDate = document.getElementById('form-start-date');
         const formEndDate = document.getElementById('form-end-date');
@@ -653,6 +689,16 @@ $brochures = $brochures_stmt->fetchAll();
             } finally {
                 btn.disabled = false;
             }
+        }
+
+        function openPreviewModal(id) {
+            previewIframe.src = "../viewer.php?id=" + id + "&embed=1";
+            previewModal.classList.remove('hidden');
+        }
+
+        function closePreviewModal() {
+            previewModal.classList.add('hidden');
+            previewIframe.src = "about:blank";
         }
     </script>
 </body>
