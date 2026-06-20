@@ -471,10 +471,27 @@ if (!$is_pdf && !empty($pages)) {
                             </div>
                         <?php else: ?>
                             <?php if (empty($pages)): ?>
-                                <div class="py-20 text-center text-slate-400">
-                                    <span class="material-symbols-outlined text-5xl mb-2">find_in_page</span>
-                                    Bu broşürde hiç sayfa bulunmamaktadır.
-                                </div>
+                                <?php if (!empty($brochure['cover_image'])): ?>
+                                    <!-- Cover-only brochure: show cover image -->
+                                    <div id="page-wrapper" class="relative inline-block max-w-full">
+                                        <img id="mainImg"
+                                             src="uploads/brochures/<?= htmlspecialchars($brochure['cover_image']) ?>"
+                                             alt="<?= htmlspecialchars($brochure['title']) ?> Kapak"
+                                             style="max-width:100%; max-height:75vh; display:block; margin:auto; border-radius:12px;">
+                                        <div id="product-overlay"></div>
+                                    </div>
+                                    <div class="mt-4 text-center">
+                                        <span class="inline-flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full">
+                                            <span class="material-symbols-outlined text-sm">info</span>
+                                            Bu broşürün sayfa görüntüleri henüz yüklenmemiştir. Kapak görseli gösteriliyor.
+                                        </span>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="py-20 text-center text-slate-400">
+                                        <span class="material-symbols-outlined text-5xl mb-2">find_in_page</span>
+                                        Bu broşürde hiç sayfa bulunmamaktadır.
+                                    </div>
+                                <?php endif; ?>
                             <?php else: ?>
                                 <!-- Page wrapper with product overlay -->
                                 <div id="page-wrapper" class="relative inline-block max-w-full">
@@ -490,7 +507,8 @@ if (!$is_pdf && !empty($pages)) {
                         <?php endif; ?>
                     </div>
 
-                    <!-- Navigation bar -->
+                    <!-- Navigation bar (only shown when there are pages to navigate) -->
+                    <?php if ($is_pdf || !empty($pages)): ?>
                     <div class="flex items-center justify-between border-t border-slate-100 pt-6 mt-4">
                         <button onclick="prevPage()" class="inline-flex items-center gap-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold transition">
                             <span class="material-symbols-outlined text-sm font-black">chevron_left</span> Önceki
@@ -502,7 +520,7 @@ if (!$is_pdf && !empty($pages)) {
                             Sonraki <span class="material-symbols-outlined text-sm font-black">chevron_right</span>
                         </button>
                     </div>
-
+                    <?php endif; ?>
 
                 </div>
 
