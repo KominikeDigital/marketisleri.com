@@ -14,7 +14,22 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         <changefreq>daily</changefreq>
     </url>
 
-    <!-- Static Pages -->
+    <!-- Static & Main Pages -->
+    <url>
+        <loc><?= htmlspecialchars($site_url) ?>/marketler.php</loc>
+        <priority>0.8</priority>
+        <changefreq>daily</changefreq>
+    </url>
+    <url>
+        <loc><?= htmlspecialchars($site_url) ?>/blog.php</loc>
+        <priority>0.8</priority>
+        <changefreq>daily</changefreq>
+    </url>
+    <url>
+        <loc><?= htmlspecialchars($site_url) ?>/iletisim.php</loc>
+        <priority>0.5</priority>
+        <changefreq>monthly</changefreq>
+    </url>
     <url>
         <loc><?= htmlspecialchars($site_url) ?>/gizlilik-politikasi.php</loc>
         <priority>0.5</priority>
@@ -60,6 +75,26 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
                 <loc><?= htmlspecialchars($site_url) ?>/viewer.php?id=<?= $brochure['id'] ?></loc>
                 <lastmod><?= $lastmod ?></lastmod>
                 <priority>0.8</priority>
+                <changefreq>weekly</changefreq>
+            </url>
+            <?php
+        }
+    } catch (PDOException $e) {
+        // Fail silently
+    }
+    ?>
+
+    <!-- Dynamic Blog Detail Pages -->
+    <?php
+    try {
+        $blogs_stmt = $pdo->query("SELECT slug, created_at FROM blog_posts ORDER BY created_at DESC");
+        while ($post = $blogs_stmt->fetch()) {
+            $lastmod = !empty($post['created_at']) ? date('Y-m-d', strtotime($post['created_at'])) : date('Y-m-d');
+            ?>
+            <url>
+                <loc><?= htmlspecialchars($site_url) ?>/blog-detay.php?slug=<?= htmlspecialchars($post['slug']) ?></loc>
+                <lastmod><?= $lastmod ?></lastmod>
+                <priority>0.6</priority>
                 <changefreq>weekly</changefreq>
             </url>
             <?php

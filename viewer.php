@@ -196,6 +196,14 @@ if (!$is_pdf) {
             font-family: monospace !important;
             z-index: 10 !important;
         }
+        @media (max-width: 768px) {
+            .hotspot-price-tag {
+                display: none !important;
+            }
+            .product-hotspot.active .hotspot-price-tag {
+                display: block !important;
+            }
+        }
 
         /* ── Zoom Modal ── */
         #zoom-modal {
@@ -964,7 +972,7 @@ if (!$is_pdf) {
             hs.style.height = p.h_pct + '%';
             hs.title = p.product_name + (p.price ? ` — ${formatPrice(p.price)} TL` : '');
             hs.dataset.idx  = i;
-            hs.addEventListener('click', () => openZoom(p, img));
+            hs.addEventListener('click', () => openZoom(p, img, hs));
             
             // Add price badge directly inside the hotspot
             if (p.price) {
@@ -979,9 +987,12 @@ if (!$is_pdf) {
     }
 
     // ── Zoom modal ───────────────────────────────────────────────────
-    function openZoom(product, img) {
+    function openZoom(product, img, hsEl = null) {
         // Deactivate all hotspots, activate clicked
         document.querySelectorAll('.product-hotspot').forEach(h => h.classList.remove('active'));
+        if (hsEl) {
+            hsEl.classList.add('active');
+        }
 
         // Render name
         document.getElementById('zoom-product-name').textContent = product.product_name;
