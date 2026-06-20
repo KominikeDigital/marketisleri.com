@@ -37,9 +37,10 @@ if (!$is_pdf) {
 // Check if Gemini API key is configured
 $gemini_configured = !empty($site_settings['gemini_api_key']);
 
-// Pre-load products for first page (if analyzed)
+// Pre-load products for first page (always check, even for cover-only brochures)
 $first_page_products = [];
-if (!$is_pdf && !empty($pages)) {
+if (!$is_pdf) {
+    // For normal brochures: only if pages exist; for cover-only: load cached products from page 1
     $prod_stmt = $pdo->prepare(
         "SELECT * FROM brochure_products WHERE brochure_id = ? AND page_number = 1 ORDER BY y_pct ASC, x_pct ASC"
     );
@@ -871,10 +872,15 @@ if (!$is_pdf && !empty($pages)) {
         }
 
         const pageNum = currentPage + 1;
-        if (productsCache[pageNum] !== undefined) {
+        if (productsCache[pageNum] !== undefined && productsCache[pageNum].length > 0) {
+            // Cache has products → render immediately
             renderHotspots(productsCache[pageNum]);
         } else if (GEMINI_CONFIGURED) {
+            // No cached products (or empty cache) → trigger Gemini analysis
             analyzeCurrentPage();
+        } else if (productsCache[pageNum] !== undefined) {
+            // Cache exists but empty, no Gemini → show hint
+            renderHotspots([]);
         }
     }
 

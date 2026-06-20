@@ -135,7 +135,7 @@ Eğer hiç ürün yoksa boş array [] döndür.
 PROMPT;
 
 // ── Call Gemini API ───────────────────────────────────────────────────────────
-$api_url  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={$gemini_key}";
+$api_url  = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={$gemini_key}";
 $payload  = json_encode([
     'contents' => [[
         'parts' => [
@@ -145,8 +145,7 @@ $payload  = json_encode([
     ]],
     'generationConfig' => [
         'temperature'     => 0.1,
-        'maxOutputTokens' => 4096,
-        'responseMimeType' => 'application/json',
+        'maxOutputTokens' => 8192,
     ],
 ], JSON_UNESCAPED_UNICODE);
 

@@ -103,21 +103,31 @@ if (!empty($where_clauses)) {
 $brochures = [];
 try {
     $brochures_stmt = $pdo->prepare("
-        SELECT b.id, b.title, b.start_date, b.end_date, b.analyzed_at,
+        SELECT b.id, b.title, b.start_date, b.end_date, b.analyzed_at, b.cover_image,
                m.name AS market_name, m.logo AS market_logo,
                COUNT(DISTINCT bp.id) AS page_count,
-               COUNT(DISTINCT CASE WHEN pr.brochure_id IS NOT NULL THEN bp.page_number END) AS analyzed_count
+               COUNT(DISTINCT CASE WHEN pr.brochure_id IS NOT NULL THEN bp.page_number END) AS analyzed_count,
+               COUNT(DISTINCT pr2.page_number) AS product_page_count
         FROM brochures b
         JOIN markets m ON m.id = b.market_id
         LEFT JOIN brochure_pages bp ON bp.brochure_id = b.id
         LEFT JOIN brochure_products pr ON pr.brochure_id = b.id AND pr.page_number = bp.page_number
+        LEFT JOIN brochure_products pr2 ON pr2.brochure_id = b.id
         $where_sql
-        GROUP BY b.id, b.title, b.start_date, b.end_date, b.analyzed_at, b.created_at, m.name, m.logo
+        GROUP BY b.id, b.title, b.start_date, b.end_date, b.analyzed_at, b.cover_image, b.created_at, m.name, m.logo
         ORDER BY b.created_at DESC
         LIMIT 100
     ");
     $brochures_stmt->execute($params);
     $brochures = $brochures_stmt->fetchAll();
+    // For cover-only brochures (no pages), treat as 1 page if cover_image exists
+    foreach ($brochures as &$b) {
+        if ((int)$b['page_count'] === 0 && !empty($b['cover_image'])) {
+            $b['page_count'] = 1;
+            $b['analyzed_count'] = (int)$b['product_page_count'] > 0 ? 1 : 0;
+        }
+    }
+    unset($b);
 } catch (Exception $e) {
     $brochures = [];
 }
