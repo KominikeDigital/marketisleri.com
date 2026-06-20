@@ -377,7 +377,7 @@ if (isset($_POST['import'])) {
                     // We will set a temporary cover, and replace it once generated
                     $cover_image = 'uploads/brochures/placeholder_cover.png';
                     $stmt = $pdo->prepare("INSERT INTO brochures (market_id, title, cover_image, start_date, end_date, show_on_homepage, analyzed_at, source_name, source_url) 
-                                           VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'amazon', ?)");
+                                           VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'amazon', ?)");
                     $stmt->execute([$market_id, $title, $cover_image, $start_date, $end_date, $show_on_homepage, $import_url]);
                     $brochure_id = $pdo->lastInsertId();
 
@@ -404,7 +404,7 @@ if (isset($_POST['import'])) {
 
                             // Insert products hotspots coordinates (each grid cell has a predefined hotspot)
                             $prod_stmt = $pdo->prepare("INSERT INTO brochure_products (brochure_id, page_number, product_name, price, original_price, unit, x_pct, y_pct, w_pct, h_pct, analyzed_at) 
-                                                        VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, datetime('now'))");
+                                                        VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
                             
                             foreach ($page_products as $c_idx => $prod) {
                                 $col = $c_idx % 3;
