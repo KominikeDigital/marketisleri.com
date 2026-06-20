@@ -30,7 +30,7 @@ $selected_tab = $_GET['tab'] ?? 'active';
 $search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
 
 // Build conditions
-$conditions = ["b.market_id = ?", "b.show_on_homepage = 1"];
+$conditions = ["b.market_id = ?"];
 $params = [$market['id']];
 
 // Tab condition
@@ -113,8 +113,10 @@ $brochures = $stmt->fetchAll();
     </style>
     
     <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
-         crossorigin="anonymous"></script>
+    <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
+             crossorigin="anonymous"></script>
+    <?php endif; ?>
 
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
@@ -174,6 +176,7 @@ $brochures = $stmt->fetchAll();
             <nav class="flex items-center gap-6 text-sm font-bold text-slate-600">
                 <a href="index.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">home</span>Anasayfa</a>
                 <a href="marketler.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">storefront</span>Marketler</a>
+                <a href="blog.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">article</span>Blog</a>
             </nav>
         </div>
     </header>
@@ -397,6 +400,7 @@ $brochures = $stmt->fetchAll();
             <!-- Legal Links -->
             <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-500 font-medium my-4 md:my-0">
                 <a href="marketler.php" class="hover:text-red-600 transition">Marketler</a>
+                <a href="blog.php" class="hover:text-red-600 transition">Blog</a>
                 <a href="gizlilik-politikasi.php" class="hover:text-red-600 transition">Gizlilik Politikası</a>
                 <a href="kullanim-kosullari.php" class="hover:text-red-600 transition">Kullanım Koşulları</a>
                 <a href="cerez-politikasi.php" class="hover:text-red-600 transition">Çerez Politikası</a>

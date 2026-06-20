@@ -53,8 +53,10 @@ $social_settings = $site_settings; // backward compatibility
     </style>
     
     <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
-         crossorigin="anonymous"></script>
+    <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
+             crossorigin="anonymous"></script>
+    <?php endif; ?>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
 
@@ -136,9 +138,12 @@ $social_settings = $site_settings; // backward compatibility
 
             <!-- Legal Links -->
             <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-500 font-medium my-4 md:my-0">
+                <a href="marketler.php" class="hover:text-red-600 transition">Marketler</a>
+                <a href="blog.php" class="hover:text-red-600 transition">Blog</a>
                 <a href="gizlilik-politikasi.php" class="hover:text-red-600 transition">Gizlilik Politikası</a>
                 <a href="kullanim-kosullari.php" class="text-red-600 font-bold transition">Kullanım Koşulları</a>
                 <a href="cerez-politikasi.php" class="hover:text-red-600 transition">Çerez Politikası</a>
+                <a href="iletisim.php" class="hover:text-red-600 transition">İletişim</a>
             </div>
 
             <!-- Social Media Links -->

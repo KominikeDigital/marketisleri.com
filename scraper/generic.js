@@ -451,7 +451,7 @@ async function scrapeGenericActiveMarkets() {
                 let insertResult;
                 try {
                     insertResult = await db.query(
-                        "INSERT INTO brochures (market_id, title, cover_image, start_date, end_date) VALUES (?, ?, ?, ?, ?)",
+                        "INSERT INTO brochures (market_id, title, cover_image, start_date, end_date, show_on_homepage) VALUES (?, ?, ?, ?, ?, 1)",
                         [market.id, title, coverName, startDate, endDate]
                     );
                 } catch (err) {

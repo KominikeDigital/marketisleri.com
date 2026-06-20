@@ -86,7 +86,9 @@ if (!$is_pdf && !empty($pages)) {
         <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <?php endif; ?>
 
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983" crossorigin="anonymous"></script>
+    <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983" crossorigin="anonymous"></script>
+    <?php endif; ?>
 
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
@@ -175,6 +177,23 @@ if (!$is_pdf && !empty($pages)) {
         .product-hotspot.active {
             background: rgba(239, 68, 68, 0.18);
             border-color: #ef4444;
+        }
+        .hotspot-price-tag {
+            position: absolute !important;
+            bottom: 2px !important;
+            right: 2px !important;
+            background-color: #dc2626 !important;
+            color: #ffffff !important;
+            font-size: 9px !important;
+            font-weight: 800 !important;
+            padding: 2px 4px !important;
+            border-radius: 4px !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+            pointer-events: none !important;
+            white-space: nowrap !important;
+            line-height: 1 !important;
+            font-family: monospace !important;
+            z-index: 10 !important;
         }
 
         /* ── Zoom Modal ── */
@@ -391,6 +410,7 @@ if (!$is_pdf && !empty($pages)) {
             <nav class="flex items-center gap-6 text-sm font-bold text-slate-600">
                 <a href="index.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">home</span>Anasayfa</a>
                 <a href="marketler.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">storefront</span>Marketler</a>
+                <a href="blog.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">article</span>Blog</a>
                 <a href="iletisim.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">mail</span>İletişim</a>
             </nav>
         </div>
@@ -409,11 +429,13 @@ if (!$is_pdf && !empty($pages)) {
         </div>
 
         <!-- Top Banner Ad -->
-        <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider mb-6 relative overflow-hidden select-none">
-            <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-            <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
-            GOOGLE ADSENSE REKLAM ALANI (728x90 veya Esnek)
-        </div>
+        <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
+            <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider mb-6 relative overflow-hidden select-none">
+                <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
+                <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
+                GOOGLE ADSENSE REKLAM ALANI (728x90 veya Esnek)
+            </div>
+        <?php endif; ?>
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
             
@@ -506,11 +528,13 @@ if (!$is_pdf && !empty($pages)) {
                 </div>
 
                 <!-- Bottom Banner Ad -->
-                <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider relative overflow-hidden select-none">
-                    <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-                    <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
-                    GOOGLE ADSENSE REKLAM ALANI (728x90 veya Esnek)
-                </div>
+                <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
+                    <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider relative overflow-hidden select-none">
+                        <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
+                        <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
+                        GOOGLE ADSENSE REKLAM ALANI (728x90 veya Esnek)
+                    </div>
+                <?php endif; ?>
             </div>
 
             <!-- Right: Sidebar -->
@@ -628,11 +652,13 @@ if (!$is_pdf && !empty($pages)) {
                 </div>
 
                 <!-- Sidebar Ad -->
-                <div class="bg-white border border-slate-200/60 rounded-3xl p-6 text-center text-xs font-bold text-slate-400 tracking-wider shadow-sm select-none relative overflow-hidden h-60 flex flex-col justify-center items-center">
-                    <div class="absolute inset-0 bg-gradient-to-b from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-                    <span class="material-symbols-outlined text-2xl mb-2 text-slate-400">ads_click</span>
-                    GOOGLE ADSENSE REKLAM ALANI<br>(300x250 veya Esnek)
-                </div>
+                <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
+                    <div class="bg-white border border-slate-200/60 rounded-3xl p-6 text-center text-xs font-bold text-slate-400 tracking-wider shadow-sm select-none relative overflow-hidden h-60 flex flex-col justify-center items-center">
+                        <div class="absolute inset-0 bg-gradient-to-b from-red-500/5 to-rose-500/5 pointer-events-none"></div>
+                        <span class="material-symbols-outlined text-2xl mb-2 text-slate-400">ads_click</span>
+                        GOOGLE ADSENSE REKLAM ALANI<br>(300x250 veya Esnek)
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </main>
@@ -655,6 +681,7 @@ if (!$is_pdf && !empty($pages)) {
             </div>
             <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-500 font-medium my-4 md:my-0">
                 <a href="marketler.php" class="hover:text-red-600 transition">Marketler</a>
+                <a href="blog.php" class="hover:text-red-600 transition">Blog</a>
                 <a href="gizlilik-politikasi.php" class="hover:text-red-600 transition">Gizlilik Politikası</a>
                 <a href="kullanim-kosullari.php" class="hover:text-red-600 transition">Kullanım Koşulları</a>
                 <a href="cerez-politikasi.php" class="hover:text-red-600 transition">Çerez Politikası</a>
@@ -921,6 +948,15 @@ if (!$is_pdf && !empty($pages)) {
             hs.title = p.product_name + (p.price ? ` — ${formatPrice(p.price)} TL` : '');
             hs.dataset.idx  = i;
             hs.addEventListener('click', () => openZoom(p, img));
+            
+            // Add price badge directly inside the hotspot
+            if (p.price) {
+                const badge = document.createElement('span');
+                badge.className = 'hotspot-price-tag';
+                badge.textContent = formatPrice(p.price) + ' TL';
+                hs.appendChild(badge);
+            }
+            
             overlay.appendChild(hs);
         });
     }

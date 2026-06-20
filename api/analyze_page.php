@@ -173,8 +173,23 @@ $saved = [];
 foreach ($products_raw as $p) {
     if (empty($p['name'])) continue;
     $name     = substr(trim((string)($p['name'] ?? '')), 0, 500);
-    $price    = is_numeric($p['price'] ?? null)          ? round((float)$p['price'], 2)          : null;
-    $orig     = is_numeric($p['original_price'] ?? null) ? round((float)$p['original_price'], 2) : null;
+    $price = null;
+    if (isset($p['price']) && $p['price'] !== null && $p['price'] !== '') {
+        $price_str = str_replace(',', '.', strval($p['price']));
+        $price_str = preg_replace('/[^\d.]/', '', $price_str);
+        if (is_numeric($price_str)) {
+            $price = round((float)$price_str, 2);
+        }
+    }
+
+    $orig = null;
+    if (isset($p['original_price']) && $p['original_price'] !== null && $p['original_price'] !== '') {
+        $orig_str = str_replace(',', '.', strval($p['original_price']));
+        $orig_str = preg_replace('/[^\d.]/', '', $orig_str);
+        if (is_numeric($orig_str)) {
+            $orig = round((float)$orig_str, 2);
+        }
+    }
     $unit     = isset($p['unit']) && $p['unit'] !== '' ? substr(trim((string)$p['unit']), 0, 100) : null;
     $x = isset($p['x']) ? min(100, max(0, (float)$p['x'])) : null;
     $y = isset($p['y']) ? min(100, max(0, (float)$p['y'])) : null;

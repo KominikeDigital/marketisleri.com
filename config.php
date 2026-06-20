@@ -216,6 +216,15 @@ function initialize_database($pdo, $driver) {
                 subject VARCHAR(255) DEFAULT NULL,
                 message TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            "CREATE TABLE IF NOT EXISTS blog_posts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                slug VARCHAR(255) NOT NULL UNIQUE,
+                content TEXT NOT NULL,
+                summary TEXT DEFAULT NULL,
+                cover_image VARCHAR(255) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         ];
     } else {
@@ -295,6 +304,15 @@ function initialize_database($pdo, $driver) {
                 email TEXT NOT NULL,
                 subject TEXT,
                 message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )",
+            "CREATE TABLE IF NOT EXISTS blog_posts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                slug TEXT NOT NULL UNIQUE,
+                content TEXT NOT NULL,
+                summary TEXT,
+                cover_image TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )"
         ];
@@ -383,7 +401,9 @@ try {
     $seo_defaults = [
         'seo_title_home' => 'Tüm Market Broşürleri Tek Yerde | marketisleri.com',
         'seo_description_home' => 'BİM, A101, ŞOK, Migros ve diğer süpermarketlerin en güncel broşürleri, aktüel ürün katalogları ve haftalık indirimleri tek bir yerde!',
-        'seo_keywords_home' => 'market broşürleri, aktüel ürünler, bim aktüel, a101 aktüel, şok katalog, haftalık indirimler, indirim broşürleri'
+        'seo_keywords_home' => 'market broşürleri, aktüel ürünler, bim aktüel, a101 aktüel, şok katalog, haftalık indirimler, indirim broşürleri',
+        'adsense_active' => '1',
+        'gemini_api_key' => ''
     ];
     
     $insert_stmt = $pdo->prepare("INSERT INTO settings (key_name, value_text) VALUES (?, ?)");
@@ -452,6 +472,13 @@ try {
     } catch (PDOException $ex) {
         // Fail silently
     }
+}
+
+// Ensure existing brochures have show_on_homepage set to 1
+try {
+    $pdo->exec("UPDATE brochures SET show_on_homepage = 1 WHERE show_on_homepage IS NULL OR show_on_homepage = 0");
+} catch (PDOException $e) {
+    // Fail silently
 }
 
 // Ensure and configure scraper markets

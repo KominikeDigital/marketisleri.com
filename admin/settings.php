@@ -35,6 +35,10 @@ if (isset($_POST['save_settings'])) {
         $stmt->execute([trim($_POST['seo_description_home'] ?? ''), 'seo_description_home']);
         $stmt->execute([trim($_POST['seo_keywords_home'] ?? ''), 'seo_keywords_home']);
         
+        // Save Google API & AdSense Settings
+        $stmt->execute([trim($_POST['gemini_api_key'] ?? ''), 'gemini_api_key']);
+        $stmt->execute([trim($_POST['adsense_active'] ?? '1'), 'adsense_active']);
+        
         $success = "Tüm ayarlar başarıyla güncellendi.";
     } catch (PDOException $e) {
         $error = "Ayarlar kaydedilirken hata oluştu: " . $e->getMessage();
@@ -279,6 +283,30 @@ foreach ($settings_raw as $s) {
                         <input type="text" id="seo_keywords" name="seo_keywords_home" value="<?= htmlspecialchars($settings['seo_keywords_home'] ?? '') ?>"
                                class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
                                placeholder="market broşürleri, aktüel ürünler, bim aktüel...">
+                    </div>
+                </div>
+
+                <!-- Settings Form Card 4: Integration Settings -->
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
+                    <div class="flex items-center gap-3 pb-4 border-b border-slate-800">
+                        <span class="material-symbols-outlined text-red-500">api</span>
+                        <h3 class="font-title text-lg font-bold text-white">Google API &amp; Reklam Ayarları</h3>
+                    </div>
+
+                    <div>
+                        <label for="gemini_api_key" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Google Gemini API Anahtarı (Yapay Zeka Fiyat Analizi İçin)</label>
+                        <input type="password" id="gemini_api_key" name="gemini_api_key" value="<?= htmlspecialchars($settings['gemini_api_key'] ?? '') ?>"
+                               class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition"
+                               placeholder="AIzaSy...">
+                    </div>
+
+                    <div>
+                        <label for="adsense_active" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Google AdSense Reklam Gösterimi</label>
+                        <select id="adsense_active" name="adsense_active"
+                                class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition">
+                            <option value="1" <?= ($settings['adsense_active'] ?? '1') === '1' ? 'selected' : '' ?>>Aktif (Reklamları Göster)</option>
+                            <option value="0" <?= ($settings['adsense_active'] ?? '1') === '0' ? 'selected' : '' ?>>Pasif (Reklamları Gizle)</option>
+                        </select>
                     </div>
                 </div>
 
