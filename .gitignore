@@ -3,3 +3,4 @@ config.local.php
 .htaccess
 database.db
 reset_git.php
+scratch/

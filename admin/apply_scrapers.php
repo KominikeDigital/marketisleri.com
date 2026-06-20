@@ -11,7 +11,7 @@ if (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true) {
 $SCRAPER_MAP = [
     'bim'                            => 'https://aktuelbrosurler.com/bim/brosurler',
     'a101'                           => 'https://aktuelbrosurler.com/a101/brosurler',
-    'sok'                            => 'https://aktuelbrosurler.com/sok/brosurler',
+    'sok'                            => 'https://aktuelbrosurler.com/sok-market/brosurler',
     'migros'                         => 'https://aktuelbrosurler.com/migros/brosurler',
     'carrefoursa'                    => 'https://aktuelbrosurler.com/carrefour/brosurler',
     'tarim-kredi-market'             => 'https://aktuelbrosurler.com/tarim-kredi-kooperatif_market/brosurler',

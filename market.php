@@ -343,14 +343,12 @@ $brochures = $stmt->fetchAll();
                                     ?>
                                 </div>
                                 
-                                <!-- File type indicator badge -->
-                                <div class="absolute top-4 right-4 z-10">
-                                    <?php if (!empty($b['pdf_path'])): ?>
-                                        <span class="bg-slate-900/80 backdrop-blur text-white p-1.5 rounded-lg flex items-center justify-center material-symbols-outlined text-sm font-semibold" title="PDF Katalog">picture_as_pdf</span>
-                                    <?php else: ?>
-                                        <span class="bg-slate-900/80 backdrop-blur text-white p-1.5 rounded-lg flex items-center justify-center material-symbols-outlined text-sm font-semibold" title="Resim Galerisi">image</span>
-                                    <?php endif; ?>
-                                </div>
+                                <!-- AI analysis badge (top right, only if analyzed) -->
+                                <?php if (!empty($b['analyzed_at'])): ?>
+                                    <div class="absolute top-3 right-3 z-10">
+                                        <span class="bg-violet-600/90 backdrop-blur text-white p-1.5 rounded-lg flex items-center justify-center material-symbols-outlined text-sm" title="AI Fiyat Analizi Yapıldı">smart_toy</span>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                             
                             <!-- Details -->

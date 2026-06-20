@@ -121,6 +121,54 @@ function tr_strtolower(string $str): string {
     return mb_strtolower($str, 'UTF-8');
 }
 
+// ─── Resolve market name to DB market record ─────────────────────────────────
+function find_market_by_name(string $raw_name, array $all_db_markets): ?array {
+    $raw_norm = tr_strtolower(trim($raw_name));
+    
+    // 1. Exact match
+    foreach ($all_db_markets as $m) {
+        $db_norm = tr_strtolower(trim($m['name']));
+        if ($raw_norm === $db_norm) {
+            return $m;
+        }
+    }
+    
+    // 2. Clean names match
+    $clean_words = ['market', 'süpermarket', 'hipermarket', 'grospermarket', 'grosper', 'marketler', 'marketleri', 'toptan', 'satış', 'mağazaları', 'gros', 'gross'];
+    $raw_clean = $raw_norm;
+    foreach ($clean_words as $w) {
+        $raw_clean = str_replace($w, '', $raw_clean);
+    }
+    $raw_clean = trim($raw_clean);
+    
+    $db_cleans = [];
+    foreach ($all_db_markets as $m) {
+        $db_norm = tr_strtolower(trim($m['name']));
+        $db_clean = $db_norm;
+        foreach ($clean_words as $w) {
+            $db_clean = str_replace($w, '', $db_clean);
+        }
+        $db_clean = trim($db_clean);
+        $db_cleans[$m['id']] = $db_clean;
+        
+        if ($db_clean === $raw_clean && mb_strlen($db_clean, 'UTF-8') >= 2) {
+            return $m;
+        }
+    }
+    
+    // 3. Substring match: if clean name matches as substring
+    foreach ($all_db_markets as $m) {
+        $db_clean = $db_cleans[$m['id']];
+        if (mb_strlen($db_clean, 'UTF-8') >= 3) {
+            if (strpos($raw_norm, $db_clean) !== false || strpos($db_clean, $raw_clean) !== false) {
+                return $m;
+            }
+        }
+    }
+    
+    return null;
+}
+
 // ─── Turkish month → date parser ─────────────────────────────────────────────
 function parse_turkish_date_range(string $text): array {
     $months = [
@@ -334,6 +382,9 @@ function run_scraper(PDO $pdo): array {
     $uploads_dir = dirname(__DIR__) . '/uploads';
     $results = ['total_new' => 0, 'markets_processed' => 0, 'errors' => []];
 
+    // Fetch all markets from database for matching
+    $all_db_markets = $pdo->query("SELECT id, name, slug, logo FROM markets")->fetchAll(PDO::FETCH_ASSOC);
+
     $markets = $pdo->query(
         "SELECT * FROM markets WHERE scraper_active = 1 AND scraper_url IS NOT NULL AND scraper_url != ''"
     )->fetchAll(PDO::FETCH_ASSOC);
@@ -380,13 +431,44 @@ function run_scraper(PDO $pdo): array {
             $card_href = $card[1];
             $card_html = $card[2];
 
+            // Extract market name from card
+            $card_market_name = '';
+            if (preg_match('/<span[^>]*class=["\']color["\'][^>]*>(.*?)<\/span>/si', $card_html, $cm)) {
+                $card_market_name = trim(strip_tags($cm[1]));
+            } elseif (preg_match('/<h4[^>]*>(.*?)<\/h4>/si', $card_html, $hm)) {
+                $card_market_name = trim(strip_tags($hm[1]));
+            }
+
+            $target_market = $market;
+            if (!empty($card_market_name)) {
+                $detected = find_market_by_name($card_market_name, $all_db_markets);
+                if ($detected) {
+                    $target_market = $detected;
+                } else {
+                    log_line("    ⚠️  Bilinmeyen market \"{$card_market_name}\", atlanıyor.");
+                    continue;
+                }
+            }
+
             // Extract title from .excerpt p
             $title = '';
             if (preg_match('/<p[^>]*>(.*?)<\/p>/si', $card_html, $tm)) {
                 $title = trim(strip_tags($tm[1]));
             }
-            if (!$title) $title = $name . ' Kataloğu';
-            else $title = $name . ' ' . $title;
+
+            $target_name = $target_market['name'];
+            $target_slug = $target_market['slug'];
+
+            if (!$title) {
+                $title = $target_name . ' Kataloğu';
+            } else {
+                $title_lower = tr_strtolower($title);
+                $name_lower = tr_strtolower($target_name);
+                $clean_name_lower = tr_strtolower(trim(str_replace(['market', 'süpermarket', 'hipermarket', 'grospermarket', 'grosper', 'marketler', 'marketleri'], '', $target_name)));
+                if (strpos($title_lower, $name_lower) === false && strpos($title_lower, $clean_name_lower) === false) {
+                    $title = $target_name . ' ' . $title;
+                }
+            }
 
             // Parse dates from title
             $dates = parse_turkish_date_range($title);
@@ -431,8 +513,8 @@ function run_scraper(PDO $pdo): array {
             // Fallback: use market logo as cover
             $cover_from_logo = false;
             if (!$cover_url) {
-                if (!empty($market['logo'])) {
-                    $logo_src = dirname(__DIR__) . '/uploads/markets/' . $market['logo'];
+                if (!empty($target_market['logo'])) {
+                    $logo_src = dirname(__DIR__) . '/uploads/markets/' . $target_market['logo'];
                     if (file_exists($logo_src)) {
                         $cover_from_logo = true;
                         log_line("    ⚠️  [{$ci}] Kapak resmi yok, market logosu kullanılacak.");
@@ -448,21 +530,25 @@ function run_scraper(PDO $pdo): array {
 
             // Check for duplicate in DB
             $exist = $pdo->prepare("SELECT id FROM brochures WHERE market_id = ? AND title = ? AND start_date = ?");
-            $exist->execute([$market['id'], $title, $start_date]);
+            $exist->execute([$target_market['id'], $title, $start_date]);
             if ($exist->fetchColumn()) {
                 log_line("    ↩ Zaten var: \"{$title}\" ({$start_date})");
                 continue;
             }
 
+            if ($target_market['id'] !== $market['id']) {
+                log_line("    🔀 Market yönlendirmesi: {$card_market_name} (Hedef ID: {$target_market['id']})");
+            }
+
             log_line("    🌟 Yeni broşür: \"{$title}\" ({$start_date} – {$end_date})");
 
             // ── Download cover image ─────────────────────────────────────────
-            $cover_name = $slug . '_auto_' . $ci . '_cover_' . $ts . '.jpg';
+            $cover_name = $target_slug . '_auto_' . $ci . '_cover_' . $ts . '.jpg';
             $cover_dest = $uploads_dir . '/brochures/' . $cover_name;
 
             if ($cover_from_logo) {
                 // Copy market logo as cover
-                $logo_src = dirname(__DIR__) . '/uploads/markets/' . $market['logo'];
+                $logo_src = dirname(__DIR__) . '/uploads/markets/' . $target_market['logo'];
                 if (!is_dir($uploads_dir . '/brochures')) mkdir($uploads_dir . '/brochures', 0755, true);
                 if (!copy($logo_src, $cover_dest)) {
                     log_line("    ❌ Logo kopyalanamadı: {$logo_src}");
@@ -493,7 +579,7 @@ function run_scraper(PDO $pdo): array {
                 $ins = $pdo->prepare(
                     "INSERT INTO brochures (market_id, title, cover_image, start_date, end_date, show_on_homepage) VALUES (?, ?, ?, ?, ?, 1)"
                 );
-                $ins->execute([$market['id'], $title, $cover_name, $start_date, $end_date]);
+                $ins->execute([$target_market['id'], $title, $cover_name, $start_date, $end_date]);
                 $brochure_id = (int)$pdo->lastInsertId();
             } catch (PDOException $e) {
                 log_line("    ❌ DB kayıt hatası: " . $e->getMessage());
@@ -509,7 +595,7 @@ function run_scraper(PDO $pdo): array {
             log_line("    📄 " . count($page_images) . " sayfa indiriliyor...");
             foreach ($page_images as $pnum => $page_url) {
                 $p = $pnum + 1;
-                $page_name = $slug . '_auto_' . $ci . '_p' . $p . '_' . $ts . '.jpg';
+                $page_name = $target_slug . '_auto_' . $ci . '_p' . $p . '_' . $ts . '.jpg';
                 $page_dest = $uploads_dir . '/brochures/pages/' . $page_name;
 
                 if (download_image($page_url, $page_dest)) {
