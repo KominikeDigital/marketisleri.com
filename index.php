@@ -94,6 +94,23 @@ $categories = $pdo->query("SELECT * FROM categories ORDER BY id ASC")->fetchAll(
 $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
 $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER BY name ASC")->fetchAll();
 
+// Fetch 3 latest blog posts for homepage showcase
+$recent_blogs = $pdo->query("SELECT title, slug, summary, cover_image, created_at FROM blog_posts ORDER BY created_at DESC LIMIT 3")->fetchAll();
+
+// Formatting date helper
+if (!function_exists('formatBlogDate')) {
+    function formatBlogDate($date_str) {
+        $months = [
+            1 => 'Ocak', 2 => 'Şubat', 3 => 'Mart', 4 => 'Nisan', 5 => 'Mayıs', 6 => 'Haziran',
+            7 => 'Temmuz', 8 => 'Ağustos', 9 => 'Eylül', 10 => 'Ekim', 11 => 'Kasım', 12 => 'Aralık'
+        ];
+        $timestamp = strtotime($date_str);
+        $day = date('j', $timestamp);
+        $month = $months[(int)date('n', $timestamp)];
+        $year = date('Y', $timestamp);
+        return "$day $month $year";
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="tr">
@@ -548,6 +565,57 @@ $popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER
                 </div>
             <?php endif; ?>
         </section>
+
+        <!-- Son Blog Yazıları / Recent Blog Posts Section -->
+        <?php if (!empty($recent_blogs)): ?>
+            <section class="space-y-8 mt-16">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <h2 class="font-title text-xl md:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+                        <span class="text-red-600 material-symbols-outlined text-2xl font-black">article</span>
+                        Son Blog Yazıları
+                    </h2>
+                    <a href="blog.php" class="text-xs font-bold text-red-600 hover:text-red-500 transition flex items-center gap-1">
+                        Tüm Yazıları Gör <span class="material-symbols-outlined text-sm">chevron_right</span>
+                    </a>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <?php foreach ($recent_blogs as $post): ?>
+                        <article class="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 flex flex-col group">
+                            <div class="h-44 overflow-hidden bg-slate-100 relative">
+                                <img src="<?= htmlspecialchars($site_url . '/' . ($post['cover_image'] ?: 'uploads/blog_cover_default.png')) ?>" 
+                                     alt="<?= htmlspecialchars($post['title']) ?>" 
+                                     class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                                <div class="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md shadow-sm">
+                                    Tasarruf
+                                </div>
+                            </div>
+                            <div class="p-5 flex-1 flex flex-col space-y-3">
+                                <div class="flex items-center gap-1.5 text-slate-400 text-xs font-medium">
+                                    <span class="material-symbols-outlined text-sm">calendar_month</span>
+                                    <span><?= formatBlogDate($post['created_at']) ?></span>
+                                </div>
+                                <h3 class="font-title text-base font-bold text-slate-900 group-hover:text-red-600 transition leading-snug">
+                                    <a href="blog-detay.php?slug=<?= htmlspecialchars($post['slug']) ?>">
+                                        <?= htmlspecialchars($post['title']) ?>
+                                    </a>
+                                </h3>
+                                <p class="text-slate-500 text-xs line-clamp-3 leading-relaxed flex-1">
+                                     <?= htmlspecialchars($post['summary']) ?>
+                                </p>
+                                <div class="pt-3 border-t border-slate-50 flex items-center justify-between">
+                                    <a href="blog-detay.php?slug=<?= htmlspecialchars($post['slug']) ?>" 
+                                       class="inline-flex items-center gap-1 text-xs font-bold text-slate-900 group-hover:text-red-600 transition-colors">
+                                        Devamını Oku 
+                                        <span class="material-symbols-outlined text-sm font-black group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endif; ?>
 
         <!-- E-Bülten / Newsletter Subscription Section -->
         <section class="py-12 bg-gradient-to-tr from-slate-900 via-slate-950 to-slate-900 rounded-3xl border border-slate-800 text-center relative overflow-hidden px-6 shadow-xl mt-12">

@@ -31,16 +31,13 @@ $total_posts = $count_stmt->fetchColumn();
 $total_pages = ceil($total_posts / $posts_per_page);
 
 // Fetch posts
-$select_query = "SELECT * FROM blog_posts $where_clause ORDER BY created_at DESC LIMIT ? OFFSET ?";
-// We need to bind limit and offset as integers for some DB drivers
+$select_query = "SELECT * FROM blog_posts $where_clause ORDER BY created_at DESC LIMIT " . (int)$posts_per_page . " OFFSET " . (int)$offset;
 $select_stmt = $pdo->prepare($select_query);
 
 $bind_idx = 1;
 foreach ($params as $param) {
     $select_stmt->bindValue($bind_idx++, $param);
 }
-$select_stmt->bindValue($bind_idx++, (int)$posts_per_page, PDO::PARAM_INT);
-$select_stmt->bindValue($bind_idx++, (int)$offset, PDO::PARAM_INT);
 $select_stmt->execute();
 $blog_posts = $select_stmt->fetchAll();
 
