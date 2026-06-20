@@ -265,6 +265,9 @@ if ($search_query !== '') {
                 <span class="material-symbols-outlined text-lg">auto_fix</span>
                 Sihirli Broşür Ekle
             </a>
+            <a href="amazon_import.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">shopping_basket</span> Amazon Broşür Ekle
+            </a>
             <a href="cron_setup.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
                 <span class="material-symbols-outlined text-lg">schedule</span>
                 Otomasyon &amp; Cron
