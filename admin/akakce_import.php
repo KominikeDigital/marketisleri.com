@@ -252,7 +252,7 @@ function akakce_load_markets(PDO $pdo): array {
     return $pdo->query("SELECT * FROM markets ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function akakce_resolve_market(PDO $pdo, string $market_name): array {
+function akakce_resolve_market(PDO $pdo, string $market_name, int $category_id = 1): array {
     $markets = akakce_load_markets($pdo);
     $found = mi_find_market_by_name($market_name, $markets);
     if ($found) {
@@ -269,11 +269,12 @@ function akakce_resolve_market(PDO $pdo, string $market_name): array {
         $slug = $slug_base . '-' . $i++;
     }
 
-    $stmt = $pdo->prepare("INSERT INTO markets (name, slug, description, category_id, scraper_active) VALUES (?, ?, ?, 1, 0)");
+    $stmt = $pdo->prepare("INSERT INTO markets (name, slug, description, category_id, scraper_active) VALUES (?, ?, ?, ?, 0)");
     $stmt->execute([
         $market_name,
         $slug,
         $market_name . ' Akakçe broşürleri',
+        $category_id,
     ]);
 
     $id = (int)$pdo->lastInsertId();
@@ -337,7 +338,7 @@ function akakce_import_item(PDO $pdo, array $item, array $options): array {
         return ['status' => 'dry', 'title' => $title, 'message' => count($pages) . ' sayfa, ' . array_sum(array_map(fn($p) => count($p['products']), $pages)) . ' ürün, ' . $market_note];
     }
 
-    $market = akakce_resolve_market($pdo, $market_name);
+    $market = akakce_resolve_market($pdo, $market_name, (int)($options['category_id'] ?? 1));
     $title = trim($market['name'] . ' ' . ($meta['start_label'] ?: date('d.m.Y', strtotime($start_date))) . ' ' . $brochure_name);
 
     $existing_id = akakce_existing_brochure($pdo, $source_uid, $item['href'], (int)$market['id'], $title, $start_date);
@@ -433,21 +434,58 @@ function akakce_import_item(PDO $pdo, array $item, array $options): array {
 
 function akakce_import_all(PDO $pdo, array $options): array {
     set_time_limit(0);
-    $html = akakce_fetch(AKAKCE_LIST_URL, 45);
-    $items = akakce_parse_list($html);
-    $limit = (int)($options['limit'] ?? 0);
-    if ($limit > 0) {
-        $items = array_slice($items, 0, $limit);
+    
+    $category_mapping = [
+        1 => ['name' => 'Süpermarket', 'akakce_l' => 1, 'local_id' => 1],
+        2 => ['name' => 'Elektronik / Teknoloji', 'akakce_l' => 2, 'local_id' => 3],
+        3 => ['name' => 'Kozmetik', 'akakce_l' => 3, 'local_id' => 4],
+        4 => ['name' => 'Ev & Yaşam', 'akakce_l' => 4, 'local_id' => 2],
+        5 => ['name' => 'Yapı Market', 'akakce_l' => 5, 'local_id' => 2],
+    ];
+
+    $selected = $options['category'] ?? 'all';
+    $targets = [];
+
+    if ($selected === 'all') {
+        $targets = $category_mapping;
+    } elseif (isset($category_mapping[(int)$selected])) {
+        $targets = [(int)$selected => $category_mapping[(int)$selected]];
+    } else {
+        $targets = $category_mapping;
     }
 
     $results = [];
-    foreach ($items as $item) {
+    $limit = (int)($options['limit'] ?? 0);
+
+    foreach ($targets as $cat_info) {
         try {
-            $results[] = akakce_import_item($pdo, $item, $options);
+            $url = 'https://www.akakce.com/brosurler/?l=' . $cat_info['akakce_l'];
+            $html = akakce_fetch($url, 45);
+            $items = akakce_parse_list($html);
+            
+            if ($limit > 0) {
+                $items = array_slice($items, 0, $limit);
+            }
+
+            // Put local_id into options for akakce_import_item to use
+            $cat_options = $options;
+            $cat_options['category_id'] = $cat_info['local_id'];
+
+            foreach ($items as $item) {
+                try {
+                    $results[] = akakce_import_item($pdo, $item, $cat_options);
+                } catch (Throwable $e) {
+                    $results[] = [
+                        'status' => 'error',
+                        'title' => ($item['market_name'] ?? '') . ' ' . ($item['brochure_name'] ?? ''),
+                        'message' => '[' . $cat_info['name'] . '] ' . $e->getMessage(),
+                    ];
+                }
+            }
         } catch (Throwable $e) {
             $results[] = [
                 'status' => 'error',
-                'title' => ($item['market_name'] ?? '') . ' ' . ($item['brochure_name'] ?? ''),
+                'title' => 'Kategori: ' . $cat_info['name'],
                 'message' => $e->getMessage(),
             ];
         }
@@ -457,13 +495,14 @@ function akakce_import_all(PDO $pdo, array $options): array {
 }
 
 function akakce_cli_options(array $argv): array {
-    $options = ['run' => false, 'limit' => 0, 'max_pages' => 0, 'refresh' => false, 'dry_run' => false];
+    $options = ['run' => false, 'limit' => 0, 'max_pages' => 0, 'refresh' => false, 'dry_run' => false, 'category' => 'all'];
     foreach ($argv as $arg) {
         if ($arg === '--run') $options['run'] = true;
         if ($arg === '--refresh') $options['refresh'] = true;
         if ($arg === '--dry-run') $options['dry_run'] = true;
         if (preg_match('/^--limit=(\d+)$/', $arg, $m)) $options['limit'] = (int)$m[1];
         if (preg_match('/^--max-pages=(\d+)$/', $arg, $m)) $options['max_pages'] = (int)$m[1];
+        if (preg_match('/^--category=([a-z0-9]+)$/', $arg, $m)) $options['category'] = $m[1];
     }
     return $options;
 }
@@ -471,7 +510,7 @@ function akakce_cli_options(array $argv): array {
 if ($is_cli) {
     $options = akakce_cli_options($argv);
     if (!$options['run']) {
-        echo "Kullanım: php admin/akakce_import.php --run [--limit=20] [--max-pages=12] [--refresh] [--dry-run]\n";
+        echo "Kullanım: php admin/akakce_import.php --run [--limit=20] [--max-pages=12] [--refresh] [--dry-run] [--category=all|1|2|3|4|5]\n";
         exit(0);
     }
     $results = akakce_import_all($pdo, $options);
@@ -491,6 +530,7 @@ if ($ran) {
         'max_pages' => max(0, (int)($_POST['max_pages'] ?? 0)),
         'refresh' => isset($_POST['refresh']),
         'dry_run' => isset($_POST['dry_run']),
+        'category' => $_POST['category'] ?? 'all',
     ];
     $results = akakce_import_all($pdo, $options);
     foreach ($results as $result) {
@@ -527,7 +567,7 @@ if ($ran) {
 
         <form method="POST" class="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-5">
             <input type="hidden" name="run" value="1">
-            <div class="grid md:grid-cols-2 gap-4">
+            <div class="grid md:grid-cols-3 gap-4">
                 <div>
                     <label class="block text-xs uppercase tracking-wider text-slate-400 mb-2 font-bold">Broşür limiti</label>
                     <input type="number" name="limit" min="0" value="<?= htmlspecialchars($_POST['limit'] ?? '0') ?>"
@@ -539,6 +579,18 @@ if ($ran) {
                     <input type="number" name="max_pages" min="0" value="<?= htmlspecialchars($_POST['max_pages'] ?? '0') ?>"
                            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white">
                     <p class="text-xs text-slate-500 mt-1">0 = broşürdeki tüm sayfalar.</p>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-slate-400 mb-2 font-bold">Kategori</label>
+                    <select name="category" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white">
+                        <option value="all" <?= !isset($_POST['category']) || $_POST['category'] === 'all' ? 'selected' : '' ?>>Tüm Kategoriler</option>
+                        <option value="1" <?= isset($_POST['category']) && $_POST['category'] === '1' ? 'selected' : '' ?>>Süpermarket</option>
+                        <option value="2" <?= isset($_POST['category']) && $_POST['category'] === '2' ? 'selected' : '' ?>>Elektronik / Teknoloji</option>
+                        <option value="3" <?= isset($_POST['category']) && $_POST['category'] === '3' ? 'selected' : '' ?>>Kozmetik</option>
+                        <option value="4" <?= isset($_POST['category']) && $_POST['category'] === '4' ? 'selected' : '' ?>>Ev & Yaşam</option>
+                        <option value="5" <?= isset($_POST['category']) && $_POST['category'] === '5' ? 'selected' : '' ?>>Yapı Market</option>
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1">İçe aktarılacak kategori.</p>
                 </div>
             </div>
             <div class="flex flex-wrap items-center gap-5">
