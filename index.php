@@ -379,6 +379,119 @@ if (!function_exists('formatBlogDate')) {
             </div>
         </section>
 
+        <!-- Amazon Deals Section -->
+        <section class="space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="font-title text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-amber-500 font-bold">shopping_bag</span>
+                    Amazon Özel Fırsatları
+                </h2>
+                <span class="text-[10px] md:text-xs font-bold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full uppercase tracking-wider">Kampanya</span>
+            </div>
+            
+            <div class="flex gap-4 overflow-x-auto no-scrollbar pb-3 mask-linear">
+                <!-- Card 1 -->
+                <div class="w-[280px] sm:w-[320px] bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between shrink-0 hover:border-amber-500 hover:shadow-lg transition-all duration-300 group relative overflow-hidden">
+                    <div class="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-colors"></div>
+                    <div class="space-y-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
+                            <span class="material-symbols-outlined font-black">local_fire_department</span>
+                        </div>
+                        <h3 class="font-title text-base font-extrabold text-slate-900 group-hover:text-amber-600 transition-colors">Günün Fırsatları</h3>
+                        <p class="text-slate-500 text-sm leading-relaxed">
+                            Amazon'da günün en popüler, en çok indirim alan aktüel ürünlerini ve sınırlı süreli flaş fırsatları keşfedin.
+                        </p>
+                    </div>
+                    <div class="pt-5">
+                        <a href="https://amzn.to/4enXakQ" target="_blank" rel="noopener" class="w-full inline-flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-md shadow-amber-500/10 hover:shadow-lg">
+                            Fırsatları Gör
+                            <span class="material-symbols-outlined text-base font-black">open_in_new</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="w-[280px] sm:w-[320px] bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between shrink-0 hover:border-amber-500 hover:shadow-lg transition-all duration-300 group relative overflow-hidden">
+                    <div class="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-colors"></div>
+                    <div class="space-y-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
+                            <span class="material-symbols-outlined font-black">trending_up</span>
+                        </div>
+                        <h3 class="font-title text-base font-extrabold text-slate-900 group-hover:text-amber-600 transition-colors">En Çok Satanlar</h3>
+                        <p class="text-slate-500 text-sm leading-relaxed">
+                            Kendi kategorilerinde en popüler, en çok değerlendirilen ve en yüksek puanı alan çok satan ürünler.
+                        </p>
+                    </div>
+                    <div class="pt-5">
+                        <a href="https://amzn.to/4xFpYwD" target="_blank" rel="noopener" class="w-full inline-flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-md shadow-amber-500/10 hover:shadow-lg">
+                            Ürünleri İncele
+                            <span class="material-symbols-outlined text-base font-black">open_in_new</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="w-[280px] sm:w-[320px] bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between shrink-0 hover:border-amber-500 hover:shadow-lg transition-all duration-300 group relative overflow-hidden">
+                    <div class="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-colors"></div>
+                    <div class="space-y-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
+                            <span class="material-symbols-outlined font-black">devices</span>
+                        </div>
+                        <h3 class="font-title text-base font-extrabold text-slate-900 group-hover:text-amber-600 transition-colors">Elektronik İndirimleri</h3>
+                        <p class="text-slate-500 text-sm leading-relaxed">
+                            Akıllı telefonlar, dizüstü bilgisayarlar, kablosuz kulaklıklar ve en popüler teknoloji aksesuarları.
+                        </p>
+                    </div>
+                    <div class="pt-5">
+                        <a href="https://amzn.to/3QwUCYA" target="_blank" rel="noopener" class="w-full inline-flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-md shadow-amber-500/10 hover:shadow-lg">
+                            İndirimleri Yakala
+                            <span class="material-symbols-outlined text-base font-black">open_in_new</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="w-[280px] sm:w-[320px] bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between shrink-0 hover:border-amber-500 hover:shadow-lg transition-all duration-300 group relative overflow-hidden">
+                    <div class="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-colors"></div>
+                    <div class="space-y-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
+                            <span class="material-symbols-outlined font-black">kitchen</span>
+                        </div>
+                        <h3 class="font-title text-base font-extrabold text-slate-900 group-hover:text-amber-600 transition-colors">Ev & Mutfak Gereçleri</h3>
+                        <p class="text-slate-500 text-sm leading-relaxed">
+                            Mutfak robotları, kahve makineleri, hava temizleyiciler ve evinizi güzelleştirecek tüm pratik aletler.
+                        </p>
+                    </div>
+                    <div class="pt-5">
+                        <a href="https://amzn.to/4oG2umZ" target="_blank" rel="noopener" class="w-full inline-flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-md shadow-amber-500/10 hover:shadow-lg">
+                            Mutfak Ürünleri
+                            <span class="material-symbols-outlined text-base font-black">open_in_new</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Card 5 -->
+                <div class="w-[280px] sm:w-[320px] bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between shrink-0 hover:border-amber-500 hover:shadow-lg transition-all duration-300 group relative overflow-hidden">
+                    <div class="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-colors"></div>
+                    <div class="space-y-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
+                            <span class="material-symbols-outlined font-black">dry_cleaning</span>
+                        </div>
+                        <h3 class="font-title text-base font-extrabold text-slate-900 group-hover:text-amber-600 transition-colors">Kişisel Bakım & Moda</h3>
+                        <p class="text-slate-500 text-sm leading-relaxed">
+                            Cilt bakım setleri, saç şekillendiriciler, parfüm çeşitleri ve modaya yön veren giyim/ayakkabı fırsatları.
+                        </p>
+                    </div>
+                    <div class="pt-5">
+                        <a href="https://amzn.to/4oGohej" target="_blank" rel="noopener" class="w-full inline-flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all shadow-md shadow-amber-500/10 hover:shadow-lg">
+                            Moda & Bakım
+                            <span class="material-symbols-outlined text-base font-black">open_in_new</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Markets Circle Slider -->
         <section class="space-y-4">
             <div class="flex justify-between items-center">
