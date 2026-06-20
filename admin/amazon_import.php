@@ -92,14 +92,50 @@ function clean_amazon_price($value) {
     $text = preg_replace('/[^0-9,.]+/u', '', $text) ?? '';
     if ($text === '') return null;
 
+    // Clean duplicate separators (e.g. ,, or ..)
+    $text = preg_replace('/[,.]{2,}/u', ',', $text) ?? $text;
+
     if (str_contains($text, ',') && str_contains($text, '.')) {
-        $text = str_replace('.', '', $text);
-        $text = str_replace(',', '.', $text);
+        if (strpos($text, ',') < strpos($text, '.')) {
+            $text = str_replace(',', '', $text);
+        } else {
+            $text = str_replace('.', '', $text);
+            $text = str_replace(',', '.', $text);
+        }
     } elseif (str_contains($text, ',')) {
         $text = str_replace(',', '.', $text);
     }
 
+    if (substr_count($text, '.') > 1) {
+        $parts = explode('.', $text);
+        $last = array_pop($parts);
+        $text = implode('', $parts) . '.' . $last;
+    }
+
     return is_numeric($text) ? (float)$text : null;
+}
+
+// Helper to extract the actual product image URL (bypassing lazy loading attributes)
+function get_amazon_image_url($img_node) {
+    if (!$img_node) return '';
+    
+    $attrs = ['data-src', 'data-lazy-src', 'data-old-hires', 'src'];
+    foreach ($attrs as $attr) {
+        $val = trim($img_node->getAttribute($attr));
+        if ($val && !str_contains($val, 'transparent-pixel') && !str_contains($val, '1x1.gif') && !str_contains($val, 'data:image')) {
+            return $val;
+        }
+    }
+    
+    $dyn = trim($img_node->getAttribute('data-a-dynamic-image'));
+    if ($dyn) {
+        $decoded = json_decode($dyn, true);
+        if (is_array($decoded) && !empty($decoded)) {
+            return key($decoded);
+        }
+    }
+
+    return trim($img_node->getAttribute('src'));
 }
 
 // HTML Product Parser
@@ -114,8 +150,24 @@ function parse_amazon_products($html, $url_base = 'https://www.amazon.com.tr') {
     $items = $xp->query('//div[@data-asin and @data-component-type="s-search-result"] | //div[contains(@class, "s-result-item") and @data-asin != ""]');
     if ($items->length > 0) {
         foreach ($items as $item) {
-            $title_node = $xp->query('.//h2//a//span | .//span[contains(@class, "a-size-base-plus")]', $item)->item(0);
-            $title = $title_node ? trim($title_node->textContent) : '';
+            $title_queries = [
+                './/h2//a//span',
+                './/span[contains(@class, "a-size-base-plus")]',
+                './/span[contains(@class, "a-size-medium")]',
+                './/span[contains(@class, "a-text-normal")]',
+                './/h2//span',
+                './/h2//a',
+                './/a/span',
+                './/div[contains(@class, "p13n-sc-truncate")]'
+            ];
+            $title = '';
+            foreach ($title_queries as $q) {
+                $node = $xp->query($q, $item)->item(0);
+                if ($node && trim($node->textContent) !== '') {
+                    $title = trim($node->textContent);
+                    break;
+                }
+            }
             
             $price_node = $xp->query('.//span[contains(@class, "a-price-whole")]', $item)->item(0);
             $price_fraction = $xp->query('.//span[contains(@class, "a-price-fraction")]', $item)->item(0);
@@ -134,8 +186,8 @@ function parse_amazon_products($html, $url_base = 'https://www.amazon.com.tr') {
                 }
             }
 
-            $img_node = $xp->query('.//img[contains(@class, "s-image")]', $item)->item(0);
-            $image_url = $img_node ? $img_node->getAttribute('src') : '';
+            $img_node = $xp->query('.//img[contains(@class, "s-image")] | .//img', $item)->item(0);
+            $image_url = get_amazon_image_url($img_node);
 
             $link_node = $xp->query('.//a[contains(@class, "a-link-normal")]', $item)->item(0);
             $prod_url = $link_node ? $link_node->getAttribute('href') : '';
@@ -158,14 +210,26 @@ function parse_amazon_products($html, $url_base = 'https://www.amazon.com.tr') {
     if (empty($products)) {
         $items = $xp->query('//div[@data-testid="grid-deal-card"] | //div[contains(@class, "DealCard-module")] | //div[contains(@class, "deal-card")]');
         foreach ($items as $item) {
-            $title_node = $xp->query('.//div[contains(@class, "dealTitle")] | .//span[contains(@class, "a-truncate-full")] | .//a/span', $item)->item(0);
-            $title = $title_node ? trim($title_node->textContent) : '';
+            $title_queries = [
+                './/div[contains(@class, "dealTitle")]',
+                './/span[contains(@class, "a-truncate-full")]',
+                './/a/span',
+                './/span[contains(@class, "a-text-normal")]'
+            ];
+            $title = '';
+            foreach ($title_queries as $q) {
+                $node = $xp->query($q, $item)->item(0);
+                if ($node && trim($node->textContent) !== '') {
+                    $title = trim($node->textContent);
+                    break;
+                }
+            }
 
-            $price_node = $xp->query('.//span[contains(@class, "a-price-whole")] | .//div[contains(@class, "priceWithDiscount")]', $item)->item(0);
+            $price_node = $xp->query('.//span[contains(@class, "a-price-whole")] | .//div[contains(@class, "priceWithDiscount")] | .//span[contains(@class, "a-offscreen")]', $item)->item(0);
             $price = $price_node ? clean_amazon_price($price_node->textContent) : null;
 
             $img_node = $xp->query('.//img', $item)->item(0);
-            $image_url = $img_node ? $img_node->getAttribute('src') : '';
+            $image_url = get_amazon_image_url($img_node);
 
             $link_node = $xp->query('.//a', $item)->item(0);
             $prod_url = $link_node ? $link_node->getAttribute('href') : '';
@@ -186,9 +250,9 @@ function parse_amazon_products($html, $url_base = 'https://www.amazon.com.tr') {
 
     // Layout 3: General tag extraction scanner
     if (empty($products)) {
-        $imgs = $xp->query('//img[contains(@src, "/images/I/") or contains(@data-src, "/images/I/")]');
+        $imgs = $xp->query('//img[contains(@src, "/images/I/") or contains(@data-src, "/images/I/") or contains(@data-lazy-src, "/images/I/") or contains(@data-a-dynamic-image, "/images/I/")]');
         foreach ($imgs as $img) {
-            $src = $img->getAttribute('src') ?: $img->getAttribute('data-src');
+            $src = get_amazon_image_url($img);
             if (!$src) continue;
 
             $parent = $img->parentNode;
@@ -200,7 +264,7 @@ function parse_amazon_products($html, $url_base = 'https://www.amazon.com.tr') {
                 if (!$parent) break;
 
                 if ($price === null) {
-                    $p_node = $xp->query('.//span[contains(@class, "a-price-whole")]', $parent)->item(0);
+                    $p_node = $xp->query('.//span[contains(@class, "a-price-whole")] | .//span[contains(@class, "a-offscreen")]', $parent)->item(0);
                     if ($p_node) {
                         $price = clean_amazon_price($p_node->textContent);
                     } else {
@@ -215,9 +279,19 @@ function parse_amazon_products($html, $url_base = 'https://www.amazon.com.tr') {
                 }
 
                 if ($title === '') {
-                    $t_node = $xp->query('.//h2 | .//h3 | .//span[contains(@class, "a-text-normal")] | .//div[contains(@class, "title")]', $parent)->item(0);
-                    if ($t_node) {
-                        $title = trim($t_node->textContent);
+                    $title_queries = [
+                        './/h2',
+                        './/h3',
+                        './/span[contains(@class, "a-text-normal")]',
+                        './/div[contains(@class, "title")]',
+                        './/div[contains(@class, "p13n-sc-truncate")]'
+                    ];
+                    foreach ($title_queries as $q) {
+                        $t_node = $xp->query($q, $parent)->item(0);
+                        if ($t_node && trim($t_node->textContent) !== '') {
+                            $title = trim($t_node->textContent);
+                            break;
+                        }
                     }
                 }
 
