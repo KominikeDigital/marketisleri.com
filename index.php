@@ -40,8 +40,12 @@ if ($selected_tab === 'upcoming') {
     $params[] = $today;
 }
 
-// Filter to only show visible brochures on homepage
-$conditions[] = "b.show_on_homepage = 1 AND ((b.pdf_path IS NOT NULL AND b.pdf_path != '') OR (SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = b.id) > 0)";
+// Filter to only show visible brochures on homepage (must have cover_image OR pdf OR pages)
+$conditions[] = "b.show_on_homepage = 1 AND (
+    (b.cover_image IS NOT NULL AND b.cover_image != '')
+    OR (b.pdf_path IS NOT NULL AND b.pdf_path != '')
+    OR (SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = b.id) > 0
+)";
 
 // Limit homepage to 1 newest brochure per market (based on the current tab's condition)
 // $subquery_cond = "AND b2.show_on_homepage = 1 AND ((b2.pdf_path IS NOT NULL AND b2.pdf_path != '') OR (SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = b2.id) > 0)";

@@ -756,11 +756,8 @@ if (!$is_pdf && !empty($pages)) {
                             <span class="material-symbols-outlined text-base text-slate-500">compare_arrows</span>
                             Diğer Marketlerde
                         </h3>
-                        <div id="compare-list" class="space-y-2">
-                            <div class="skeleton h-10 rounded-xl"></div>
-                            <div class="skeleton h-10 rounded-xl"></div>
-                        </div>
-                        <div id="compare-empty" class="hidden text-xs text-slate-400 py-2">Diğer marketlerde bu ürün bulunamadı.</div>
+                        <div id="compare-list" class="space-y-2"></div>
+                        <div id="compare-empty" class="text-xs text-slate-400 py-2">Bir ürüne tıklayarak fiyatları karşılaştırın.</div>
                     </div>
 
                     <!-- Price Alert Form -->
@@ -1074,6 +1071,7 @@ if (!$is_pdf && !empty($pages)) {
             .then(data => {
                 list.innerHTML = '';
                 if (!data.success || !data.results.length) {
+                    empty.textContent = 'Diğer marketlerde bu ürün bulunamadı.';
                     empty.classList.remove('hidden');
                     return;
                 }
@@ -1102,7 +1100,7 @@ if (!$is_pdf && !empty($pages)) {
                       </a>`);
                 });
             })
-            .catch(() => { list.innerHTML = ''; empty.classList.remove('hidden'); });
+            .catch(() => { list.innerHTML = ''; empty.textContent = 'Karşılaştırma yüklenemedi.'; empty.classList.remove('hidden'); });
     }
 
     // ── Price alert submit ───────────────────────────────────────────

@@ -15,13 +15,47 @@ $today = date('Y-m-d');
 $categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAll();
 
 // Fetch all markets with active brochure counts
-$markets = $pdo->query("
+$markets_raw = $pdo->query("
     SELECT m.*, c.name as category_name,
-           (SELECT COUNT(*) FROM brochures b WHERE b.market_id = m.id AND b.start_date <= '$today' AND b.end_date >= '$today') as active_count
+           (SELECT COUNT(*) FROM brochures b WHERE b.market_id = m.id AND b.start_date <= '$today' AND b.end_date >= '$today') as active_count,
+           (SELECT COUNT(*) FROM brochures b2 WHERE b2.market_id = m.id) as total_brochures
     FROM markets m
     LEFT JOIN categories c ON m.category_id = c.id
     ORDER BY m.name ASC
 ")->fetchAll();
+
+// De-duplicate markets by normalized name (e.g. "Altun" and "Altun Market" could be different,
+// but exact duplicates like "altun" == "altun" with different IDs are merged)
+// Normalize: lowercase, trim, collapse spaces, remove common suffixes like "market", "markets"
+function normalizeMarketName($name) {
+    $name = mb_strtolower(trim($name), 'UTF-8');
+    $name = preg_replace('/\s+/', ' ', $name);
+    // Remove trailing " market", " markets", " süpermarket" etc.
+    $name = preg_replace('/\s+(market|markets|süpermarket|supermarket|mağaza)$/u', '', $name);
+    return $name;
+}
+
+$seen_names = [];
+$markets = [];
+foreach ($markets_raw as $m) {
+    $key = normalizeMarketName($m['name']);
+    if (!isset($seen_names[$key])) {
+        $seen_names[$key] = count($markets);
+        $markets[] = $m;
+    } else {
+        // Merge: keep the one with more brochures or lower id; sum active count
+        $existing_idx = $seen_names[$key];
+        $markets[$existing_idx]['active_count'] += $m['active_count'];
+        // If this duplicate has more total brochures, prefer it as representative
+        if ($m['total_brochures'] > $markets[$existing_idx]['total_brochures']) {
+            $active_sum = $markets[$existing_idx]['active_count']; // save merged sum
+            $markets[$existing_idx] = $m;
+            $markets[$existing_idx]['active_count'] = $active_sum;
+        }
+    }
+}
+// Re-sort by name after dedup
+usort($markets, fn($a, $b) => strcmp($a['name'], $b['name']));
 
 ?>
 <!DOCTYPE html>

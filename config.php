@@ -474,9 +474,9 @@ try {
     }
 }
 
-// Ensure existing brochures have show_on_homepage set to 1
+// Ensure newly added brochures without show_on_homepage default get set to 1 (NULL only)
 try {
-    $pdo->exec("UPDATE brochures SET show_on_homepage = 1 WHERE show_on_homepage IS NULL OR show_on_homepage = 0");
+    $pdo->exec("UPDATE brochures SET show_on_homepage = 1 WHERE show_on_homepage IS NULL");
 } catch (PDOException $e) {
     // Fail silently
 }
