@@ -137,6 +137,42 @@ function mysql_configured($db_name, $db_user, $db_pass) {
         $db_pass !== 'VERITABANI_SIFRENIZ';
 }
 
+function brochure_has_ai_analysis(array $brochure): bool {
+    return !empty($brochure['analyzed_at']) || (int)($brochure['has_ai_analysis'] ?? 0) > 0;
+}
+
+function brochure_status_badge_html(string $selected_tab, string $start_date, string $end_date, string $today): string {
+    $base = 'inline-flex items-center gap-1.5 text-[11px] font-black px-3.5 py-2 rounded-xl shadow-xl ring-2 ring-white/95 border uppercase tracking-wider';
+
+    if ($selected_tab === 'active') {
+        $diff = strtotime($end_date) - strtotime($today);
+        $days = (int)round($diff / (60 * 60 * 24));
+
+        if ($days === 0) {
+            return '<span class="' . $base . ' bg-red-600 text-white border-red-400 shadow-red-950/30"><span class="material-symbols-outlined text-sm">timer</span>BUGÜN SON!</span>';
+        }
+
+        if ($days === 1) {
+            return '<span class="' . $base . ' bg-red-600 text-white border-red-400 shadow-red-950/30"><span class="material-symbols-outlined text-sm">priority_high</span>YARIN BİTİYOR!</span>';
+        }
+
+        if ($days <= 3) {
+            return '<span class="' . $base . ' bg-red-600 text-white border-red-400 shadow-red-950/30"><span class="material-symbols-outlined text-sm">local_fire_department</span>SON ' . $days . ' GÜN!</span>';
+        }
+
+        return '<span class="' . $base . ' bg-emerald-600 text-white border-emerald-300 shadow-emerald-950/25"><span class="material-symbols-outlined text-sm">verified</span>AKTİF</span>';
+    }
+
+    if ($selected_tab === 'upcoming') {
+        $diff = strtotime($start_date) - strtotime($today);
+        $days = (int)round($diff / (60 * 60 * 24));
+        $label = $days === 1 ? 'YARIN BAŞLIYOR' : $days . ' GÜN SONRA';
+        return '<span class="' . $base . ' bg-amber-500 text-white border-amber-300 shadow-amber-950/25"><span class="material-symbols-outlined text-sm">event_upcoming</span>' . $label . '</span>';
+    }
+
+    return '<span class="' . $base . ' bg-slate-600 text-white border-slate-300 shadow-slate-950/20"><span class="material-symbols-outlined text-sm">event_busy</span>SÜRESİ GEÇTİ</span>';
+}
+
 function initialize_database($pdo, $driver) {
     if ($driver === 'mysql') {
         $schema = [
@@ -704,6 +740,22 @@ foreach ($scrapers as $slug => $url) {
     }
 }
 
+// Repair known source-mix records caused by aktuelbrosurler.com returning unrelated cards.
+try {
+    $pdo->exec("
+        UPDATE brochures
+        SET market_id = (SELECT id FROM markets WHERE slug = 'beykoz-market' LIMIT 1)
+        WHERE market_id = (SELECT id FROM markets WHERE slug = 'sok' LIMIT 1)
+          AND EXISTS (SELECT 1 FROM markets WHERE slug = 'beykoz-market')
+          AND (
+              LOWER(COALESCE(title, '')) LIKE '%beykoz%'
+              OR LOWER(COALESCE(cover_image, '')) LIKE '%beykoz%'
+              OR LOWER(COALESCE(pdf_path, '')) LIKE '%beykoz%'
+          )
+    ");
+} catch (PDOException $e) {
+    // Fail silently
+}
 
 // Auto cleanup function: removes brochures expired for more than 30 days along with their files
 function cleanup_expired_brochures($pdo) {

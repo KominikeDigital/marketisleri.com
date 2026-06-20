@@ -61,7 +61,8 @@ if (!empty($search_query)) {
     $params[] = '%' . $search_query . '%';
 }
 
-$sql = "SELECT b.*, m.name as market_name, m.logo as market_logo 
+$sql = "SELECT b.*, m.name as market_name, m.logo as market_logo,
+               CASE WHEN EXISTS (SELECT 1 FROM brochure_products bp WHERE bp.brochure_id = b.id) THEN 1 ELSE 0 END as has_ai_analysis
         FROM brochures b 
         JOIN markets m ON b.market_id = m.id
         WHERE " . implode(" AND ", $conditions) . "
@@ -314,39 +315,15 @@ $brochures = $stmt->fetchAll();
                                 
                                 <!-- Dynamic countdown badge -->
                                 <div class="absolute top-4 left-4 z-10">
-                                    <?php
-                                    if ($selected_tab === 'active') {
-                                        $diff = strtotime($b['end_date']) - strtotime($today);
-                                        $days = round($diff / (60 * 60 * 24));
-                                        
-                                        if ($days == 0) {
-                                            echo '<span class="bg-red-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-red-600/20 tracking-wider">BUGÜN SON!</span>';
-                                        } elseif ($days == 1) {
-                                            echo '<span class="bg-red-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-red-600/20 tracking-wider">YARIN BİTİYOR!</span>';
-                                        } elseif ($days <= 3) {
-                                            echo '<span class="bg-red-600 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-red-600/20 tracking-wider">SON ' . $days . ' GÜN!</span>';
-                                        } else {
-                                            echo '<span class="bg-emerald-800 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-emerald-800/10 tracking-wider">AKTİF</span>';
-                                        }
-                                    } elseif ($selected_tab === 'upcoming') {
-                                        $diff = strtotime($b['start_date']) - strtotime($today);
-                                        $days = round($diff / (60 * 60 * 24));
-                                        
-                                        if ($days == 1) {
-                                            echo '<span class="bg-amber-500 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-amber-500/20 tracking-wider">YARIN BAŞLIYOR</span>';
-                                        } else {
-                                            echo '<span class="bg-amber-500 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg shadow-amber-500/20 tracking-wider">' . $days . ' GÜN SONRA</span>';
-                                        }
-                                    } else {
-                                        echo '<span class="bg-slate-500 text-white text-[11px] font-black px-3 py-1.5 rounded-full tracking-wider">SÜRESİ GEÇTİ</span>';
-                                    }
-                                    ?>
+                                    <?= brochure_status_badge_html($selected_tab, $b['start_date'], $b['end_date'], $today) ?>
                                 </div>
                                 
                                 <!-- AI analysis badge (top right, only if analyzed) -->
-                                <?php if (!empty($b['analyzed_at'])): ?>
-                                    <div class="absolute top-3 right-3 z-10">
-                                        <span class="bg-violet-600/90 backdrop-blur text-white p-1.5 rounded-lg flex items-center justify-center material-symbols-outlined text-sm" title="AI Fiyat Analizi Yapıldı">smart_toy</span>
+                                <?php if (brochure_has_ai_analysis($b)): ?>
+                                    <div class="absolute z-10" style="top: 1rem; right: 1rem;">
+                                        <span class="text-white flex items-center justify-center material-symbols-outlined"
+                                              style="width: 2.5rem; height: 2.5rem; background: #6d28d9; border-radius: 1rem; border: 2px solid #fff; box-shadow: 0 16px 35px rgba(76, 29, 149, .32); font-size: 22px;"
+                                              title="Yapay zeka ürün analizi yapıldı">smart_toy</span>
                                     </div>
                                 <?php endif; ?>
                             </div>

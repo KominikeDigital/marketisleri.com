@@ -70,6 +70,14 @@ if (!$force) {
     );
     $existing->execute([$brochure_id, $page_number]);
     if ($existing->fetchColumn() > 0) {
+        try {
+            $pages_count = (int)$pdo->query("SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = {$brochure_id}")->fetchColumn();
+            $analyzed_count = (int)$pdo->query("SELECT COUNT(DISTINCT page_number) FROM brochure_products WHERE brochure_id = {$brochure_id}")->fetchColumn();
+            if ($pages_count === 0 || ($pages_count > 0 && $analyzed_count >= $pages_count)) {
+                $pdo->prepare("UPDATE brochures SET analyzed_at = COALESCE(analyzed_at, CURRENT_TIMESTAMP) WHERE id = ?")->execute([$brochure_id]);
+            }
+        } catch (Exception $e) { /* ignore */ }
+
         // Return cached results
         $products = $pdo->prepare(
             "SELECT * FROM brochure_products WHERE brochure_id = ? AND page_number = ? ORDER BY y_pct ASC, x_pct ASC"
@@ -236,7 +244,7 @@ foreach ($products_raw as $p) {
 try {
     $pages_count = (int)$pdo->query("SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = {$brochure_id}")->fetchColumn();
     $analyzed_count = (int)$pdo->query("SELECT COUNT(DISTINCT page_number) FROM brochure_products WHERE brochure_id = {$brochure_id}")->fetchColumn();
-    if ($pages_count > 0 && $analyzed_count === $pages_count) {
+    if (($pages_count === 0 && count($saved) > 0) || ($pages_count > 0 && $analyzed_count >= $pages_count)) {
         $pdo->prepare("UPDATE brochures SET analyzed_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$brochure_id]);
     }
 } catch (Exception $e) { /* ignore */ }

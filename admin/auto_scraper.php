@@ -121,6 +121,40 @@ function tr_strtolower(string $str): string {
     return mb_strtolower($str, 'UTF-8');
 }
 
+function scraper_compact_text(string $str): string {
+    $str = tr_strtolower($str);
+    $map = [
+        'ı' => 'i', 'ğ' => 'g', 'ü' => 'u', 'ş' => 's', 'ö' => 'o', 'ç' => 'c',
+        'İ' => 'i', 'Ğ' => 'g', 'Ü' => 'u', 'Ş' => 's', 'Ö' => 'o', 'Ç' => 'c',
+    ];
+    $str = strtr($str, $map);
+    return preg_replace('/[^a-z0-9]+/', '', $str) ?: '';
+}
+
+function scraper_market_aliases(array $market): array {
+    $stop_words = ['market', 'supermarket', 'süpermarket', 'hipermarket', 'grospermarket', 'grosper', 'marketler', 'marketleri', 'toptan', 'satış', 'satis', 'mağazaları', 'magazalari', 'gros', 'gross'];
+    $aliases = [
+        scraper_compact_text($market['slug'] ?? ''),
+        scraper_compact_text($market['name'] ?? ''),
+    ];
+
+    $clean = tr_strtolower((string)($market['name'] ?? ''));
+    foreach ($stop_words as $word) {
+        $clean = str_replace($word, ' ', $clean);
+    }
+    $clean = scraper_compact_text($clean);
+    if ($clean !== '') {
+        $aliases[] = $clean;
+    }
+    if ($clean !== '' && strlen($clean) <= 3) {
+        $aliases[] = $clean . 'market';
+    }
+
+    $aliases = array_values(array_unique(array_filter($aliases, fn($a) => strlen($a) >= 3)));
+    usort($aliases, fn($a, $b) => strlen($b) <=> strlen($a));
+    return $aliases;
+}
+
 // ─── Resolve market name to DB market record ─────────────────────────────────
 function find_market_by_name(string $raw_name, array $all_db_markets): ?array {
     $raw_norm = tr_strtolower(trim($raw_name));
@@ -166,6 +200,24 @@ function find_market_by_name(string $raw_name, array $all_db_markets): ?array {
         }
     }
     
+    return null;
+}
+
+function find_market_by_detail_url(string $detail_url, array $all_db_markets): ?array {
+    if ($detail_url === '') return null;
+
+    $path = parse_url($detail_url, PHP_URL_PATH) ?: $detail_url;
+    $path_compact = scraper_compact_text(urldecode($path));
+    if ($path_compact === '') return null;
+
+    foreach ($all_db_markets as $m) {
+        foreach (scraper_market_aliases($m) as $alias) {
+            if (strlen($alias) >= 5 && strpos($path_compact, $alias) !== false) {
+                return $m;
+            }
+        }
+    }
+
     return null;
 }
 
@@ -443,7 +495,10 @@ function run_scraper(PDO $pdo): array {
             if (!empty($card_market_name)) {
                 $detected = find_market_by_name($card_market_name, $all_db_markets);
                 if ($detected) {
-                    $target_market = $detected;
+                    if ((string)$detected['id'] !== (string)$market['id']) {
+                        log_line("    ⚠️  Kaynak karışması engellendi: {$name} sayfasında \"{$card_market_name}\" kartı var, atlandı.");
+                        continue;
+                    }
                 } else {
                     log_line("    ⚠️  Bilinmeyen market \"{$card_market_name}\", atlanıyor.");
                     continue;
@@ -500,6 +555,14 @@ function run_scraper(PDO $pdo): array {
             $cover_url  = $cover_url ? resolve_url($cover_url, $url) : '';
             $detail_url = $card_href ? resolve_url($card_href, $url) : '';
 
+            if (empty($card_market_name)) {
+                $detected_from_url = find_market_by_detail_url($detail_url, $all_db_markets);
+                if ($detected_from_url && (string)$detected_from_url['id'] !== (string)$market['id']) {
+                    log_line("    ⚠️  Kaynak URL uyuşmazlığı engellendi: {$name} sayfasında {$detected_from_url['name']} linki var, atlandı.");
+                    continue;
+                }
+            }
+
             // Fetch detail pages first to get high-resolution images
             $page_images = [];
             if ($detail_url) {
@@ -534,10 +597,6 @@ function run_scraper(PDO $pdo): array {
             if ($exist->fetchColumn()) {
                 log_line("    ↩ Zaten var: \"{$title}\" ({$start_date})");
                 continue;
-            }
-
-            if ($target_market['id'] !== $market['id']) {
-                log_line("    🔀 Market yönlendirmesi: {$card_market_name} (Hedef ID: {$target_market['id']})");
             }
 
             log_line("    🌟 Yeni broşür: \"{$title}\" ({$start_date} – {$end_date})");

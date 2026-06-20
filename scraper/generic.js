@@ -235,9 +235,107 @@ function getElementValue($, element, selector, attribute = null) {
     return el.text().trim();
 }
 
+function normalizeText(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/ı/g, 'i')
+        .replace(/İ/g, 'i')
+        .replace(/ş/g, 's')
+        .replace(/Ş/g, 's')
+        .replace(/ğ/g, 'g')
+        .replace(/Ğ/g, 'g')
+        .replace(/ü/g, 'u')
+        .replace(/Ü/g, 'u')
+        .replace(/ö/g, 'o')
+        .replace(/Ö/g, 'o')
+        .replace(/ç/g, 'c')
+        .replace(/Ç/g, 'c')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function compactText(value) {
+    return normalizeText(value).replace(/[^a-z0-9]+/g, '');
+}
+
+function marketAliases(market) {
+    const stopWords = [
+        'market', 'supermarket', 'hipermarket', 'grospermarket', 'grosper',
+        'marketler', 'marketleri', 'toptan', 'satis', 'magazalari', 'gros', 'gross'
+    ];
+
+    const aliases = new Set([
+        compactText(market.slug),
+        compactText(market.name)
+    ]);
+
+    let cleanName = normalizeText(market.name);
+    stopWords.forEach(word => {
+        cleanName = cleanName.replace(new RegExp(`\\b${word}\\b`, 'g'), ' ');
+    });
+    cleanName = compactText(cleanName);
+    if (cleanName) aliases.add(cleanName);
+    if (cleanName && cleanName.length <= 3) aliases.add(`${cleanName}market`);
+
+    return [...aliases].filter(alias => alias.length >= 3).sort((a, b) => b.length - a.length);
+}
+
+function findMarketByName(rawName, markets) {
+    const rawCompact = compactText(rawName);
+    if (!rawCompact) return null;
+
+    for (const market of markets) {
+        if (marketAliases(market).includes(rawCompact)) {
+            return market;
+        }
+    }
+
+    for (const market of markets) {
+        const aliases = marketAliases(market);
+        if (aliases.some(alias => alias.length >= 4 && (rawCompact.includes(alias) || alias.includes(rawCompact)))) {
+            return market;
+        }
+    }
+
+    return null;
+}
+
+function findMarketByDetailUrl(detailUrl, markets) {
+    if (!detailUrl) return null;
+
+    let pathCompact = '';
+    try {
+        pathCompact = compactText(decodeURIComponent(new URL(detailUrl).pathname));
+    } catch (e) {
+        pathCompact = compactText(detailUrl);
+    }
+
+    if (!pathCompact) return null;
+
+    for (const market of markets) {
+        const match = marketAliases(market).some(alias => alias.length >= 5 && pathCompact.includes(alias));
+        if (match) return market;
+    }
+
+    return null;
+}
+
+function getCardMarketName($, card) {
+    const selectors = ['span.color', '.color', 'h4', '.market-name', '.brand', '.brand-name'];
+    for (const selector of selectors) {
+        const text = $(card).find(selector).first().text().trim();
+        if (text) return text;
+    }
+    return '';
+}
+
 async function scrapeGenericActiveMarkets() {
     console.log('[Generic Scraper] Aktif dinamik marketler taranıyor...');
-    
+
+    const allMarkets = await db.query("SELECT id, name, slug, logo FROM markets");
+
     // Fetch all active markets with scraping rules configured
     const activeMarkets = await db.query(
         "SELECT * FROM markets WHERE scraper_active = 1 AND scraper_url IS NOT NULL AND scraper_url != ''"
@@ -286,19 +384,6 @@ async function scrapeGenericActiveMarkets() {
             for (let i = 0; i < cards.length; i++) {
                 const card = cards[i];
                 
-                // Get Title
-                let title = getElementValue($, card, market.scraper_title);
-                if (!title) {
-                    title = `${market.name} Kataloğu`;
-                } else {
-                    title = `${market.name} ${title}`;
-                }
-                
-                // Parse Dates
-                const dates = parseTurkishDateRange(title);
-                const startDate = dates.startDate;
-                const endDate = dates.endDate;
-                
                 // Get Cover Image URL
                 let coverUrl = getElementValue($, card, market.scraper_cover);
                 let coverFromLogo = false; // Flag: kapak, market logosundan mı geliyor?
@@ -323,7 +408,39 @@ async function scrapeGenericActiveMarkets() {
                     if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
                     if (!detailUrl.startsWith('http')) detailUrl = new URL(detailUrl, origin).toString();
                 }
-                
+
+                const cardMarketName = getCardMarketName($, card);
+                if (cardMarketName) {
+                    const detectedMarket = findMarketByName(cardMarketName, allMarkets);
+                    if (!detectedMarket) {
+                        console.warn(`  ⚠️ Kart marketi tanınmadı (${cardMarketName}), broşür atlanıyor.`);
+                        continue;
+                    }
+                    if (String(detectedMarket.id) !== String(market.id)) {
+                        console.warn(`  ⚠️ Kaynak karışması engellendi: ${market.name} sayfasında "${cardMarketName}" kartı var, atlandı.`);
+                        continue;
+                    }
+                } else {
+                    const detectedFromUrl = findMarketByDetailUrl(detailUrl, allMarkets);
+                    if (detectedFromUrl && String(detectedFromUrl.id) !== String(market.id)) {
+                        console.warn(`  ⚠️ Kaynak URL uyuşmazlığı engellendi: ${market.name} sayfasında ${detectedFromUrl.name} linki var, atlandı.`);
+                        continue;
+                    }
+                }
+
+                // Get Title
+                let title = getElementValue($, card, market.scraper_title);
+                if (!title) {
+                    title = `${market.name} Kataloğu`;
+                } else {
+                    title = `${market.name} ${title}`;
+                }
+
+                // Parse Dates
+                const dates = parseTurkishDateRange(title);
+                const startDate = dates.startDate;
+                const endDate = dates.endDate;
+
                 // Check if brochure already exists
                 const existRows = await db.query(
                     "SELECT id FROM brochures WHERE market_id = ? AND start_date = ? AND title = ?",
