@@ -33,7 +33,7 @@ $force        = filter_var($_REQUEST['force'] ?? false, FILTER_VALIDATE_BOOLEAN)
 
 if (!$brochure_id) json_err('brochure_id gerekli');
 
-// ── Fetch page record ─────────────────────────────────────────────────────────
+// ── Fetch page record (fall back to cover image for cover-only brochures) ────
 $page_stmt = $pdo->prepare(
     "SELECT bp.*, b.market_id FROM brochure_pages bp 
      JOIN brochures b ON b.id = bp.brochure_id
@@ -42,7 +42,26 @@ $page_stmt = $pdo->prepare(
 $page_stmt->execute([$brochure_id, $page_number]);
 $page = $page_stmt->fetch();
 
-if (!$page) json_err("Sayfa bulunamadı: broşür #{$brochure_id}, sayfa #{$page_number}", 404);
+// Fall back to cover image if no page record found
+$using_cover = false;
+if (!$page) {
+    $cover_stmt = $pdo->prepare("SELECT id, market_id, cover_image FROM brochures WHERE id = ?");
+    $cover_stmt->execute([$brochure_id]);
+    $bro = $cover_stmt->fetch();
+    if ($bro && !empty($bro['cover_image'])) {
+        $using_cover = true;
+        $page = [
+            'brochure_id'  => $brochure_id,
+            'page_number'  => 1,
+            'market_id'    => $bro['market_id'],
+            'image_path'   => null, // will use cover path below
+            'cover_image'  => $bro['cover_image'],
+        ];
+        $page_number = 1;
+    } else {
+        json_err("Sayfa bulunamadı: broşür #{$brochure_id}, sayfa #{$page_number}", 404);
+    }
+}
 
 // ── Check if already analyzed ─────────────────────────────────────────────────
 if (!$force) {
@@ -72,10 +91,14 @@ if (!$gemini_key) {
     json_err('Gemini API anahtarı ayarlanmamış. Admin > Ayarlar > Gemini API Key alanını doldurun.', 503);
 }
 
-// ── Load page image ───────────────────────────────────────────────────────────
-$img_path = dirname(__DIR__) . '/uploads/brochures/pages/' . $page['image_path'];
+// ── Load page image (page record or cover image) ─────────────────────────────
+if ($using_cover) {
+    $img_path = dirname(__DIR__) . '/uploads/brochures/' . $page['cover_image'];
+} else {
+    $img_path = dirname(__DIR__) . '/uploads/brochures/pages/' . $page['image_path'];
+}
 if (!file_exists($img_path)) {
-    json_err('Sayfa görseli bulunamadı: ' . $page['image_path'], 404);
+    json_err('Sayfa görseli bulunamadı: ' . basename($img_path), 404);
 }
 
 $img_data    = base64_encode(file_get_contents($img_path));

@@ -477,15 +477,11 @@ if (!$is_pdf && !empty($pages)) {
                                         <img id="mainImg"
                                              src="uploads/brochures/<?= htmlspecialchars($brochure['cover_image']) ?>"
                                              alt="<?= htmlspecialchars($brochure['title']) ?> Kapak"
+                                             onload="onImageLoad()"
                                              style="max-width:100%; max-height:75vh; display:block; margin:auto; border-radius:12px;">
                                         <div id="product-overlay"></div>
                                     </div>
-                                    <div class="mt-4 text-center">
-                                        <span class="inline-flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full">
-                                            <span class="material-symbols-outlined text-sm">info</span>
-                                            Bu broşürün sayfa görüntüleri henüz yüklenmemiştir. Kapak görseli gösteriliyor.
-                                        </span>
-                                    </div>
+                                    <div id="no-products-hint" class="hidden"></div>
                                 <?php else: ?>
                                     <div class="py-20 text-center text-slate-400">
                                         <span class="material-symbols-outlined text-5xl mb-2">find_in_page</span>
