@@ -64,7 +64,6 @@ function curl_get(string $url, array $extra_headers = [], int $timeout = 20): st
         ], $extra_headers),
     ]);
     $body = curl_exec($ch);
-    curl_close($ch);
     return $body ?: '';
 }
 
@@ -100,7 +99,6 @@ function download_image(string $url, string $dest, array $extra_headers = [], st
     ]);
     $ok = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
     fclose($fp);
 
     if (!$ok || $code !== 200 || filesize($dest) < 500) {
@@ -157,50 +155,7 @@ function scraper_market_aliases(array $market): array {
 
 // ─── Resolve market name to DB market record ─────────────────────────────────
 function find_market_by_name(string $raw_name, array $all_db_markets): ?array {
-    $raw_norm = tr_strtolower(trim($raw_name));
-    
-    // 1. Exact match
-    foreach ($all_db_markets as $m) {
-        $db_norm = tr_strtolower(trim($m['name']));
-        if ($raw_norm === $db_norm) {
-            return $m;
-        }
-    }
-    
-    // 2. Clean names match
-    $clean_words = ['market', 'süpermarket', 'hipermarket', 'grospermarket', 'grosper', 'marketler', 'marketleri', 'toptan', 'satış', 'mağazaları', 'gros', 'gross'];
-    $raw_clean = $raw_norm;
-    foreach ($clean_words as $w) {
-        $raw_clean = str_replace($w, '', $raw_clean);
-    }
-    $raw_clean = trim($raw_clean);
-    
-    $db_cleans = [];
-    foreach ($all_db_markets as $m) {
-        $db_norm = tr_strtolower(trim($m['name']));
-        $db_clean = $db_norm;
-        foreach ($clean_words as $w) {
-            $db_clean = str_replace($w, '', $db_clean);
-        }
-        $db_clean = trim($db_clean);
-        $db_cleans[$m['id']] = $db_clean;
-        
-        if ($db_clean === $raw_clean && mb_strlen($db_clean, 'UTF-8') >= 2) {
-            return $m;
-        }
-    }
-    
-    // 3. Substring match: if clean name matches as substring
-    foreach ($all_db_markets as $m) {
-        $db_clean = $db_cleans[$m['id']];
-        if (mb_strlen($db_clean, 'UTF-8') >= 3) {
-            if (strpos($raw_norm, $db_clean) !== false || strpos($db_clean, $raw_clean) !== false) {
-                return $m;
-            }
-        }
-    }
-    
-    return null;
+    return mi_find_market_by_name($raw_name, $all_db_markets);
 }
 
 function find_market_by_detail_url(string $detail_url, array $all_db_markets): ?array {
@@ -211,7 +166,7 @@ function find_market_by_detail_url(string $detail_url, array $all_db_markets): ?
     if ($path_compact === '') return null;
 
     foreach ($all_db_markets as $m) {
-        foreach (scraper_market_aliases($m) as $alias) {
+        foreach (mi_market_aliases($m) as $alias) {
             if (strlen($alias) >= 5 && strpos($path_compact, $alias) !== false) {
                 return $m;
             }
@@ -554,6 +509,7 @@ function run_scraper(PDO $pdo): array {
             // Resolve URLs
             $cover_url  = $cover_url ? resolve_url($cover_url, $url) : '';
             $detail_url = $card_href ? resolve_url($card_href, $url) : '';
+            $source_uid = $detail_url ? 'aktuelbrosurler:' . md5($detail_url) : null;
 
             if (empty($card_market_name)) {
                 $detected_from_url = find_market_by_detail_url($detail_url, $all_db_markets);
@@ -592,8 +548,15 @@ function run_scraper(PDO $pdo): array {
             }
 
             // Check for duplicate in DB
-            $exist = $pdo->prepare("SELECT id FROM brochures WHERE market_id = ? AND title = ? AND start_date = ?");
-            $exist->execute([$target_market['id'], $title, $start_date]);
+            $exist = $pdo->prepare("
+                SELECT id
+                FROM brochures
+                WHERE (? IS NOT NULL AND source_uid = ?)
+                   OR (? <> '' AND source_url = ?)
+                   OR (market_id = ? AND title = ? AND start_date = ?)
+                LIMIT 1
+            ");
+            $exist->execute([$source_uid, $source_uid, $detail_url, $detail_url, $target_market['id'], $title, $start_date]);
             if ($exist->fetchColumn()) {
                 log_line("    ↩ Zaten var: \"{$title}\" ({$start_date})");
                 continue;
@@ -636,9 +599,9 @@ function run_scraper(PDO $pdo): array {
             // ── Insert brochure record ────────────────────────────────────────
             try {
                 $ins = $pdo->prepare(
-                    "INSERT INTO brochures (market_id, title, cover_image, start_date, end_date, show_on_homepage) VALUES (?, ?, ?, ?, ?, 1)"
+                    "INSERT INTO brochures (market_id, title, cover_image, start_date, end_date, source_name, source_url, source_uid, show_on_homepage) VALUES (?, ?, ?, ?, ?, 'aktuelbrosurler', ?, ?, 1)"
                 );
-                $ins->execute([$target_market['id'], $title, $cover_name, $start_date, $end_date]);
+                $ins->execute([$target_market['id'], $title, $cover_name, $start_date, $end_date, $detail_url ?: $url, $source_uid]);
                 $brochure_id = (int)$pdo->lastInsertId();
             } catch (PDOException $e) {
                 log_line("    ❌ DB kayıt hatası: " . $e->getMessage());

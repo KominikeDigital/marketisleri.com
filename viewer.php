@@ -1105,6 +1105,7 @@ if (!$is_pdf) {
                         ? `<img src="${r.market_logo_url}" alt="${escHtml(r.market_name)}">`
                         : `<span class="material-symbols-outlined text-slate-400 text-sm">storefront</span>`;
                     const days    = r.days_left === 0 ? 'Son gün' : `${r.days_left} gün`;
+                    const match   = r.match_label ? `<span class="text-[10px] font-bold text-indigo-500">${escHtml(r.match_label)}</span>` : '';
 
                     list.insertAdjacentHTML('beforeend', `
                       <a href="${r.brochure_url}" target="_blank" class="compare-item">
@@ -1112,6 +1113,7 @@ if (!$is_pdf) {
                         <div class="flex-1 min-w-0">
                           <div class="font-bold text-sm text-slate-800">${escHtml(r.market_name)}</div>
                           <div class="text-xs text-slate-400">${days} kaldı</div>
+                          ${match}
                         </div>
                         <div class="flex flex-col items-end gap-0.5">
                           <span class="font-black text-base ${isCheap ? 'text-emerald-600' : 'text-slate-700'}">${formatPrice(r.price)} TL</span>

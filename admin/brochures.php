@@ -29,6 +29,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'toggle_homepage') {
 $error = null;
 $success = null;
 
+if (!empty($_SESSION['flash_success'])) {
+    $success = $_SESSION['flash_success'];
+    unset($_SESSION['flash_success']);
+}
+if (!empty($_SESSION['flash_error'])) {
+    $error = $_SESSION['flash_error'];
+    unset($_SESSION['flash_error']);
+}
+
 // Handle Add/Edit Brochure
 if (isset($_POST['save'])) {
     $id = isset($_POST['id']) && $_POST['id'] !== '' ? intval($_POST['id']) : null;

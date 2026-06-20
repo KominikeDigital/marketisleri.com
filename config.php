@@ -8,6 +8,8 @@ $admin_pass = "161224";
 
 date_default_timezone_set('Europe/Istanbul');
 
+require_once __DIR__ . '/lib/data_helpers.php';
+
 // Self-healing .htaccess creation
 $htaccess_path = __DIR__ . '/.htaccess';
 if (!is_file($htaccess_path)) {
@@ -196,6 +198,9 @@ function initialize_database($pdo, $driver) {
                 title VARCHAR(255) NOT NULL,
                 cover_image VARCHAR(255),
                 pdf_path VARCHAR(255) DEFAULT NULL,
+                source_name VARCHAR(50) DEFAULT NULL,
+                source_url VARCHAR(500) DEFAULT NULL,
+                source_uid VARCHAR(100) DEFAULT NULL,
                 start_date DATE,
                 end_date DATE,
                 show_on_homepage TINYINT DEFAULT 1,
@@ -285,6 +290,9 @@ function initialize_database($pdo, $driver) {
                 title TEXT NOT NULL,
                 cover_image TEXT,
                 pdf_path TEXT,
+                source_name TEXT,
+                source_url TEXT,
+                source_uid TEXT,
                 start_date DATE,
                 end_date DATE,
                 show_on_homepage INTEGER DEFAULT 1,
@@ -510,6 +518,24 @@ try {
     }
 }
 
+// Database Migrations for external brochure sources (Akakçe, etc.)
+$brochure_source_columns = [
+    'source_name' => 'VARCHAR(50) DEFAULT NULL',
+    'source_url' => 'VARCHAR(500) DEFAULT NULL',
+    'source_uid' => 'VARCHAR(100) DEFAULT NULL',
+];
+foreach ($brochure_source_columns as $col => $type) {
+    try {
+        $pdo->query("SELECT $col FROM brochures LIMIT 1");
+    } catch (PDOException $e) {
+        try {
+            $pdo->exec("ALTER TABLE brochures ADD COLUMN $col $type");
+        } catch (PDOException $ex) {
+            // Fail silently
+        }
+    }
+}
+
 // Ensure newly added brochures without show_on_homepage default get set to 1 (NULL only)
 try {
     $pdo->exec("UPDATE brochures SET show_on_homepage = 1 WHERE show_on_homepage IS NULL");
@@ -589,7 +615,7 @@ $all_markets_to_ensure = [
     ['Tahtakale Spot',            'tahtakale-spot',          'tahtakale-spot.png',            'Tahtakale Spot İndirim Broşürü',                1],
     ['Tema Market',               'tema-market',             'tema-market.png',               'Tema Market Aktüel Ürünler',                    1],
     ['Üçler Market',              'ucler-market',            'ucler-market.png',              'Üçler Market İndirim Kataloğu',                 1],
-    ['Ulukardeşler',              'ulukardesler',            'ulukardesler.png',              'Ulukardeşler Market Aktüel Ürünler',            1],
+    ['Snowy Ulu Kardeşler',       'snowy-ulu-kardesler',     'Snowy Ulu Kardeşler.png',       'Snowy Ulu Kardeşler İndirim Broşürleri',        1],
     ['Yunus Market',              'yunus-market',            'yunus-market.png',              'Yunus Market İndirim Broşürü',                  1],
     ['Zırhlı Toptan Market',      'zirhlı-toptan',           'zirhlı-toptan.png',             'Zırhlı Toptan Market Aktüel Ürünler',           1],
     ['Şehzade Market',            'sehzade-market',          'sehzade-market.png',            'Şehzade Market İndirim Kataloğu',               1],
@@ -648,7 +674,7 @@ try {
         'tahtakale-spot'                 => 'Tahtakale Spot.jpg',
         'tema-market'                    => 'Tema Mağazalar Zinciri.jpg',
         'ucler-market'                   => 'Üçler.png',
-        'ulukardesler'                   => 'Snowy Ulu Kardeşler.png',
+        'snowy-ulu-kardesler'            => 'Snowy Ulu Kardeşler.png',
         'yunus-market'                   => 'Yunus.jpg',
         'zirhlı-toptan'                  => 'Zırhlı Toptan Market.jpg',
         'sehzade-market'                 => 'Şehzade.jpg',
@@ -715,7 +741,7 @@ $scrapers = [
     'tahtakale-spot'                 => 'https://aktuelbrosurler.com/tahtakale-spot/brosurler',
     'tema-market'                    => 'https://aktuelbrosurler.com/tema-market/brosurler',
     'ucler-market'                   => 'https://aktuelbrosurler.com/uclermarket/brosurler',
-    'ulukardesler'                   => 'https://aktuelbrosurler.com/ulukardesler/brosurler',
+    'snowy-ulu-kardesler'            => 'https://aktuelbrosurler.com/ulukardesler/brosurler',
     'yunus-market'                   => 'https://aktuelbrosurler.com/yunusmarket/brosurler',
     'sehzade-market'                 => 'https://aktuelbrosurler.com/sehzademarket/brosurler',
     'macrocenter'                    => 'https://aktuelbrosurler.com/macrocenter/brosurler',

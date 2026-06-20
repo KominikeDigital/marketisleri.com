@@ -10,6 +10,15 @@ if (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true) {
 $error = null;
 $success = null;
 
+if (!empty($_SESSION['flash_success'])) {
+    $success = $_SESSION['flash_success'];
+    unset($_SESSION['flash_success']);
+}
+if (!empty($_SESSION['flash_error'])) {
+    $error = $_SESSION['flash_error'];
+    unset($_SESSION['flash_error']);
+}
+
 // Handle Add/Edit Market
 if (isset($_POST['save'])) {
     $id = isset($_POST['id']) && $_POST['id'] !== '' ? intval($_POST['id']) : null;
@@ -192,6 +201,14 @@ $markets = $markets_stmt->fetchAll();
         <header class="h-20 bg-slate-900/40 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-8 shrink-0">
             <h1 class="font-title text-2xl font-bold text-white font-bold">Market Yönetimi</h1>
             <div class="flex items-center gap-4">
+                <a href="merge_duplicate_markets.php" class="flex items-center gap-2 bg-amber-600 hover:bg-amber-500 text-white px-5 py-2.5 rounded-xl font-bold transition shadow-lg shadow-amber-600/10">
+                    <span class="material-symbols-outlined text-lg">call_merge</span>
+                    Çiftleri Birleştir
+                </a>
+                <a href="akakce_import.php" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl font-bold transition shadow-lg shadow-indigo-600/10">
+                    <span class="material-symbols-outlined text-lg">cloud_download</span>
+                    Akakçe İçe Aktar
+                </a>
                 <button onclick="openModal()" class="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl font-bold transition shadow-lg shadow-red-600/10">
                     <span class="material-symbols-outlined text-lg">add_circle</span>
                     Yeni Market Ekle
@@ -242,9 +259,10 @@ $markets = $markets_stmt->fetchAll();
                             </thead>
                             <tbody class="divide-y divide-slate-800 text-sm">
                                 <?php foreach ($markets as $m): ?>
+                                    <?php $logo_exists = !empty($m['logo']) && is_file(dirname(__DIR__) . '/uploads/markets/' . $m['logo']); ?>
                                     <tr class="hover:bg-slate-800/20 transition-all">
                                         <td class="p-4 pl-6">
-                                            <?php if ($m['logo']): ?>
+                                            <?php if ($logo_exists): ?>
                                                 <img src="../uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
                                                      class="w-12 h-12 object-contain bg-white rounded-xl p-1 border border-slate-800 shadow" 
                                                      alt="Logo">
