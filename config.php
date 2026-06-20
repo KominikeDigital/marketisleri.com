@@ -949,4 +949,209 @@ function compress_and_resize_image($file_path, $max_width = 1000, $quality = 85)
     
     return $success;
 }
+
+// Admin Panel Dark/Light Theme Switcher Output Buffer
+if (strpos($_SERVER['SCRIPT_NAME'] ?? '', '/admin/') !== false) {
+    ob_start(function($buffer) {
+        // Only modify if it's an HTML response
+        if (stripos($buffer, '<html') === false) {
+            return $buffer;
+        }
+
+        // 1. Inject Theme Switcher CSS and Script in <head>
+        $head_inject = '
+        <style>
+            /* Light mode overrides for admin panel */
+            html.light-mode body {
+                background-color: #f8fafc !important;
+                color: #0f172a !important;
+            }
+            html.light-mode aside {
+                background-color: #ffffff !important;
+                border-color: #e2e8f0 !important;
+            }
+            html.light-mode aside a {
+                color: #475569 !important;
+            }
+            html.light-mode aside a:hover {
+                background-color: #f1f5f9 !important;
+                color: #0f172a !important;
+            }
+            html.light-mode aside a.bg-red-600 {
+                background-color: #dc2626 !important;
+                color: #ffffff !important;
+            }
+            html.light-mode main {
+                background-color: #f8fafc !important;
+            }
+            html.light-mode header {
+                background-color: rgba(255, 255, 255, 0.8) !important;
+                border-color: #e2e8f0 !important;
+            }
+            html.light-mode header h1, html.light-mode header h2, html.light-mode header h3 {
+                color: #0f172a !important;
+            }
+            html.light-mode .bg-slate-900 {
+                background-color: #ffffff !important;
+                border-color: #e2e8f0 !important;
+            }
+            html.light-mode .border-slate-800 {
+                border-color: #e2e8f0 !important;
+            }
+            html.light-mode .text-white {
+                color: #0f172a !important;
+            }
+            html.light-mode .text-slate-400 {
+                color: #64748b !important;
+            }
+            html.light-mode .text-slate-300 {
+                color: #334155 !important;
+            }
+            html.light-mode .text-slate-100 {
+                color: #0f172a !important;
+            }
+            html.light-mode .bg-slate-950 {
+                background-color: #f1f5f9 !important;
+            }
+            html.light-mode table thead tr {
+                background-color: #f1f5f9 !important;
+                border-color: #e2e8f0 !important;
+            }
+            html.light-mode table tbody tr:hover {
+                background-color: #f1f5f9 !important;
+            }
+            html.light-mode table tbody tr {
+                border-color: #e2e8f0 !important;
+            }
+            html.light-mode .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
+                border-color: #e2e8f0 !important;
+            }
+            html.light-mode input, html.light-mode select, html.light-mode textarea {
+                background-color: #ffffff !important;
+                border-color: #cbd5e1 !important;
+                color: #0f172a !important;
+            }
+            html.light-mode .bg-slate-950\/40 {
+                background-color: #f1f5f9 !important;
+            }
+            html.light-mode .bg-slate-900\/40 {
+                background-color: rgba(255, 255, 255, 0.4) !important;
+            }
+            html.light-mode .text-indigo-400 {
+                color: #4f46e5 !important;
+            }
+            html.light-mode .text-emerald-400 {
+                color: #059669 !important;
+            }
+            html.light-mode .text-amber-400 {
+                color: #d97706 !important;
+            }
+            html.light-mode .text-red-400 {
+                color: #dc2626 !important;
+            }
+            html.light-mode .bg-slate-950\/60 {
+                background-color: #f1f5f9 !important;
+            }
+            html.light-mode .border-slate-700 {
+                border-color: #cbd5e1 !important;
+            }
+            html.light-mode .bg-slate-800 {
+                background-color: #e2e8f0 !important;
+                color: #0f172a !important;
+            }
+            html.light-mode .bg-slate-800/20 {
+                background-color: rgba(226, 232, 240, 0.2) !important;
+            }
+            html.light-mode .hover\3a bg-slate-800\/20:hover {
+                background-color: rgba(226, 232, 240, 0.2) !important;
+            }
+            html.light-mode .shadow-xl {
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05) !important;
+            }
+            html.light-mode .bg-black/60 {
+                background-color: rgba(0, 0, 0, 0.4) !important;
+            }
+            html.light-mode .bg-black/80 {
+                background-color: rgba(0, 0, 0, 0.6) !important;
+            }
+            html.light-mode .bg-slate-950/80 {
+                background-color: rgba(241, 245, 249, 0.8) !important;
+            }
+            /* Additional light mode table and card contrast improvements */
+            html.light-mode .bg-slate-900 border {
+                background-color: #ffffff !important;
+                border-color: #e2e8f0 !important;
+            }
+        </style>
+        <script>
+            (function() {
+                const theme = localStorage.getItem("admin-theme") || "dark";
+                if (theme === "light") {
+                    document.documentElement.classList.add("light-mode");
+                }
+            })();
+        </script>
+        ';
+
+        // Insert inside <head>
+        $buffer = preg_replace('/(<head[^>]*>)/i', '$1' . $head_inject, $buffer);
+
+        // 2. Inject Toggle Button right above the Logout block in sidebar
+        $toggle_html = '
+        <div class="px-4 py-2 border-t border-slate-800/40 dynamic-theme-container">
+            <button onclick="toggleAdminTheme()" class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all font-semibold text-xs animate-pulse">
+                <span class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-sm font-semibold theme-icon">light_mode</span>
+                    <span>Tema Değiştir</span>
+                </span>
+                <span class="theme-text text-[10px] uppercase font-bold tracking-wider text-red-500">Dark</span>
+            </button>
+        </div>
+        ';
+
+        // Inject before the logout div (which starts with <div class="p-4 border-t border-slate-800">)
+        $buffer = preg_replace('/(<div class="[^"]*p-4[^"]*border-t[^"]*border-slate-800[^"]*">)/i', $toggle_html . '$1', $buffer);
+
+        // 3. Inject script to toggle theme
+        $toggle_script = '
+        <script>
+            function updateThemeUI() {
+                const isLight = document.documentElement.classList.contains("light-mode");
+                const icon = document.querySelector(".dynamic-theme-container .theme-icon");
+                const text = document.querySelector(".dynamic-theme-container .theme-text");
+                const button = document.querySelector(".dynamic-theme-container button");
+                if (button) {
+                    button.classList.remove("animate-pulse"); // Stop pulse after load
+                }
+                if (icon && text) {
+                    if (isLight) {
+                        icon.textContent = "dark_mode";
+                        text.textContent = "Light";
+                        text.className = "theme-text text-[10px] uppercase font-bold tracking-wider text-indigo-500";
+                    } else {
+                        icon.textContent = "light_mode";
+                        text.textContent = "Dark";
+                        text.className = "theme-text text-[10px] uppercase font-bold tracking-wider text-red-500";
+                    }
+                }
+            }
+            function toggleAdminTheme() {
+                if (document.documentElement.classList.contains("light-mode")) {
+                    document.documentElement.classList.remove("light-mode");
+                    localStorage.setItem("admin-theme", "dark");
+                } else {
+                    document.documentElement.classList.add("light-mode");
+                    localStorage.setItem("admin-theme", "light");
+                }
+                updateThemeUI();
+            }
+            document.addEventListener("DOMContentLoaded", updateThemeUI);
+        </script>
+        ';
+
+        $buffer = preg_replace('/(<\/body>)/i', $toggle_script . '$1', $buffer);
+
+        return $buffer;
+    });
+}
 ?>
