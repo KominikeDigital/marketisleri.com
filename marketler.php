@@ -17,7 +17,7 @@ $categories = $pdo->query("SELECT * FROM categories ORDER BY name ASC")->fetchAl
 // Fetch all markets with active brochure counts
 $markets_raw = $pdo->query("
     SELECT m.*, c.name as category_name,
-           (SELECT COUNT(*) FROM brochures b WHERE b.market_id = m.id AND b.start_date <= '$today' AND b.end_date >= '$today') as active_count,
+           (SELECT COUNT(*) FROM brochures b WHERE b.market_id = m.id AND b.show_on_homepage = 1 AND b.start_date <= '$today' AND b.end_date >= '$today' AND (b.cover_image IS NOT NULL AND b.cover_image != '' OR b.pdf_path IS NOT NULL AND b.pdf_path != '')) as active_count,
            (SELECT COUNT(*) FROM brochures b2 WHERE b2.market_id = m.id) as total_brochures
     FROM markets m
     LEFT JOIN categories c ON m.category_id = c.id
