@@ -30,7 +30,10 @@ $selected_tab = $_GET['tab'] ?? 'active';
 $search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
 
 // Build conditions
-$conditions = ["b.market_id = ?"];
+$conditions = [
+    "b.market_id = ?",
+    "((b.pdf_path IS NOT NULL AND b.pdf_path != '') OR (SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = b.id) > 0)"
+];
 $params = [$market['id']];
 
 // Tab condition

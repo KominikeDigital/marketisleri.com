@@ -248,6 +248,9 @@ $broken_count = (int)$pdo->query("SELECT COUNT(*) FROM markets WHERE scraper_act
             <a href="analyze_brochures.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
                 <span class="material-symbols-outlined text-lg">explore</span> Broşür AI Analizi
             </a>
+            <a href="blogs.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">article</span> Blog Yazıları
+            </a>
             <a href="subscribers.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
                 <span class="material-symbols-outlined text-lg">mail</span> Aboneler
             </a>

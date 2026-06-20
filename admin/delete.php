@@ -10,7 +10,7 @@ if (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true) {
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $type = $_GET['type'] ?? '';
 
-if ($id > 0 && ($type === 'market' || $type === 'brochure')) {
+if ($id > 0 && ($type === 'market' || $type === 'brochure' || $type === 'blog')) {
     
     if ($type === 'market') {
         // 1. Fetch market details to delete logo file
@@ -89,10 +89,29 @@ if ($id > 0 && ($type === 'market' || $type === 'brochure')) {
             $pdo->prepare("DELETE FROM brochure_pages WHERE brochure_id = ?")->execute([$id]);
             $pdo->prepare("DELETE FROM brochures WHERE id = ?")->execute([$id]);
         }
+    } elseif ($type === 'blog') {
+        // 1. Fetch blog details to delete cover image if not the default
+        $blog_stmt = $pdo->prepare("SELECT cover_image FROM blog_posts WHERE id = ?");
+        $blog_stmt->execute([$id]);
+        $cover = $blog_stmt->fetchColumn();
+        
+        if (!empty($cover) && $cover !== 'uploads/blog_cover_default.png' && file_exists('../' . $cover)) {
+            @unlink('../' . $cover);
+        }
+        
+        // 2. Delete from DB
+        $pdo->prepare("DELETE FROM blog_posts WHERE id = ?")->execute([$id]);
     }
 }
 
-$redirect = ($type === 'market') ? 'markets.php' : 'brochures.php';
+$redirect = 'index.php';
+if ($type === 'market') {
+    $redirect = 'markets.php';
+} elseif ($type === 'brochure') {
+    $redirect = 'brochures.php';
+} elseif ($type === 'blog') {
+    $redirect = 'blogs.php';
+}
 header("Location: " . $redirect);
 exit;
 ?>
