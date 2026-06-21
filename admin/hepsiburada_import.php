@@ -200,6 +200,200 @@ function hepsiburada_fallback_product(string $requested_url, string $final_url, 
     ];
 }
 
+function hepsiburada_canonical_product_url(string $url): string {
+    $parts = parse_url($url);
+    if (!$parts || empty($parts['host'])) return $url;
+    $scheme = $parts['scheme'] ?? 'https';
+    $path = $parts['path'] ?? '';
+    return $scheme . '://' . $parts['host'] . $path;
+}
+
+function hepsiburada_reader_fetch(string $url): array {
+    $reader_url = 'https://r.jina.ai/' . $url;
+    $ch = curl_init($reader_url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 4,
+        CURLOPT_TIMEOUT => 35,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING => '',
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json',
+            'User-Agent: Mozilla/5.0 (compatible; marketisleri.com/1.0)',
+        ],
+    ]);
+
+    $raw = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err = curl_error($ch);
+
+    $decoded = is_string($raw) ? json_decode($raw, true) : null;
+    $data = is_array($decoded) && isset($decoded['data']) && is_array($decoded['data']) ? $decoded['data'] : [];
+
+    return [
+        'code' => $code,
+        'error' => $err,
+        'title' => trim((string)($data['title'] ?? '')),
+        'description' => trim((string)($data['description'] ?? '')),
+        'content' => trim((string)($data['content'] ?? '')),
+    ];
+}
+
+function hepsiburada_reader_fetch_html(string $url): array {
+    $reader_url = 'https://r.jina.ai/' . $url;
+    $ch = curl_init($reader_url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 4,
+        CURLOPT_TIMEOUT => 35,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING => '',
+        CURLOPT_HTTPHEADER => [
+            'X-Return-Format: html',
+            'User-Agent: Mozilla/5.0 (compatible; marketisleri.com/1.0)',
+        ],
+    ]);
+
+    $content = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err = curl_error($ch);
+
+    return [
+        'code' => $code,
+        'error' => $err,
+        'content' => is_string($content) ? $content : '',
+    ];
+}
+
+function hepsiburada_markdown_clean(string $text): string {
+    $text = preg_replace('/!\[[^\]]*]\([^)]+\)/u', ' ', $text) ?? $text;
+    $text = preg_replace('/\[([^\]]+)]\([^)]+\)/u', '$1', $text) ?? $text;
+    $text = preg_replace('/[*_`#>]+/u', ' ', $text) ?? $text;
+    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    return trim(preg_replace('/\s+/', ' ', $text) ?? '');
+}
+
+function hepsiburada_reader_images(string $content): array {
+    $images = [];
+    if (preg_match_all('~https?:\\\\?/\\\\?/productimages\.hepsiburada\.net[^\s)\]"<>\\\\]+~i', $content, $matches)) {
+        foreach ($matches[0] as $url) {
+            $url = html_entity_decode(str_replace('\/', '/', $url), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $url = rtrim($url, '.,');
+            $url = preg_replace('~/format:[a-z0-9]+$~i', '', $url) ?? $url;
+            if (str_contains($url, '/48-64/') || str_contains($url, '/80/') || str_contains($url, '/40/')) {
+                continue;
+            }
+            $images[] = $url;
+        }
+    }
+
+    usort($images, function($a, $b) {
+        $score = fn($url) => (str_contains($url, '/424-600/') ? 30 : 0)
+            + (str_contains($url, '/550/') ? 20 : 0)
+            + (str_contains($url, '/375/') ? 10 : 0);
+        return $score($b) <=> $score($a);
+    });
+
+    return array_values(array_unique($images));
+}
+
+function hepsiburada_reader_price(string $content): ?float {
+    $lines = preg_split('/\R/u', $content) ?: [];
+    $start = 0;
+    foreach ($lines as $i => $line) {
+        if (str_starts_with(trim($line), '# ') && stripos($line, 'Hepsiburada') === false) {
+            $start = $i;
+        }
+    }
+
+    for ($i = $start; $i < min(count($lines), $start + 90); $i++) {
+        $line = trim($lines[$i]);
+        if ($line === '') continue;
+        if (preg_match('/(peşin fiyatına|ek garanti|koruma paketi|satıcı puanı)/iu', $line)) continue;
+        if (preg_match('/\b\d+\s*x\s*\d/u', $line)) continue;
+        if (preg_match('/(\d{1,3}(?:\.\d{3})*,\d{2})\s*TL/u', $line, $m)) {
+            return mi_parse_price($m[1]);
+        }
+    }
+
+    if (preg_match('/(\d{1,3}(?:\.\d{3})*,\d{2})\s*TL/u', $content, $m)) {
+        return mi_parse_price($m[1]);
+    }
+
+    return null;
+}
+
+function hepsiburada_parse_reader_product(array $reader, string $requested_url, string $final_url): array {
+    $content = (string)($reader['content'] ?? '');
+    $title = '';
+
+    if (preg_match_all('/^#\s+(.+)$/mu', $content, $matches)) {
+        foreach ($matches[1] as $candidate) {
+            $clean = hepsiburada_markdown_clean($candidate);
+            if ($clean !== '' && stripos($clean, 'Hepsiburada') === false && stripos($clean, 'Değerlendirmeleri') === false) {
+                $title = $clean;
+            }
+        }
+    }
+
+    if ($title === '') {
+        $title = preg_replace('/\s+Fiyatı\s*$/iu', '', trim((string)($reader['title'] ?? ''))) ?: hepsiburada_title_from_url($final_url);
+    }
+
+    $images = hepsiburada_reader_images($content);
+    $review_count = '';
+    if (preg_match('/(?:Tüm\s+)?Değerlendirmeler\s*\((\d+)\)/iu', $content, $m)
+        || preg_match('/\*\*(\d+)\*\*\s*Değerlendirme/iu', $content, $m)) {
+        $review_count = $m[1];
+    }
+
+    $rating = '';
+    if (preg_match('/(\d+(?:[,.]\d+)?)\s*\/\s*5/u', $content, $m)) {
+        $rating = str_replace(',', '.', $m[1]);
+    }
+
+    return [
+        'sku' => hepsiburada_extract_sku($final_url, $content) ?: hepsiburada_extract_sku($requested_url, $content),
+        'title' => $title ?: 'Hepsiburada Ürün Fırsatı',
+        'price' => hepsiburada_reader_price($content),
+        'image_url' => $images[0] ?? '',
+        'image_urls' => $images,
+        'rating' => $rating,
+        'review_count' => $review_count,
+        'description' => mb_substr(trim((string)($reader['description'] ?? '')), 0, 280, 'UTF-8'),
+        'affiliate_url' => $requested_url,
+        'final_url' => $final_url,
+        'partial' => false,
+    ];
+}
+
+function hepsiburada_merge_product_data(array $primary, array $fallback): array {
+    foreach (['sku', 'title', 'rating', 'review_count', 'description'] as $field) {
+        if (trim((string)($primary[$field] ?? '')) === '' && trim((string)($fallback[$field] ?? '')) !== '') {
+            $primary[$field] = $fallback[$field];
+        }
+    }
+
+    if (($primary['price'] ?? null) === null && ($fallback['price'] ?? null) !== null) {
+        $primary['price'] = $fallback['price'];
+    }
+
+    if (empty($primary['image_url']) && !empty($fallback['image_url'])) {
+        $primary['image_url'] = $fallback['image_url'];
+    }
+
+    $images = array_merge($primary['image_urls'] ?? [], $fallback['image_urls'] ?? []);
+    $primary['image_urls'] = array_values(array_unique(array_filter($images)));
+    if (($primary['image_url'] ?? '') === '' && $primary['image_urls']) {
+        $primary['image_url'] = $primary['image_urls'][0];
+    }
+
+    $primary['partial'] = empty($primary['image_urls']) || ($primary['price'] ?? null) === null;
+    return $primary;
+}
+
 function hepsiburada_meta(DOMXPath $xp, string $name): string {
     $queries = [
         '//meta[@property="' . $name . '"]/@content',
@@ -497,6 +691,29 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
             $fetch = hepsiburada_fetch($affiliate_url);
             $product_url = $fetch['product_url'] ?? $fetch['final_url'];
             $product = hepsiburada_parse_product($fetch['html'], $affiliate_url, $product_url);
+
+            if (($product['price'] ?? null) === null || empty($product['image_urls'])) {
+                $reader_url = hepsiburada_canonical_product_url($product_url);
+                $reader = hepsiburada_reader_fetch($reader_url);
+                if (($reader['content'] ?? '') !== '') {
+                    $reader_product = hepsiburada_parse_reader_product($reader, $affiliate_url, $reader_url);
+                    $product = hepsiburada_merge_product_data($product, $reader_product);
+                }
+            }
+
+            if (count($product['image_urls'] ?? []) < 5) {
+                $reader_url = hepsiburada_canonical_product_url($product_url);
+                $reader_html = hepsiburada_reader_fetch_html($reader_url);
+                if (($reader_html['content'] ?? '') !== '') {
+                    $html_product = hepsiburada_parse_reader_product([
+                        'title' => $product['title'] ?? '',
+                        'description' => $product['description'] ?? '',
+                        'content' => $reader_html['content'],
+                    ], $affiliate_url, $reader_url);
+                    $product = hepsiburada_merge_product_data($product, $html_product);
+                }
+            }
+
             $source_uid = hepsiburada_source_uid($product);
 
             $stored_images = [];
