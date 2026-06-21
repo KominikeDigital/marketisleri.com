@@ -1,8 +1,6 @@
 <?php
-// admin/amazon_import.php - Amazon Product Catalog Creator
 require '../config.php';
 
-// Authentication Check
 if (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true) {
     header("Location: login.php");
     exit;
@@ -11,519 +9,452 @@ if (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true) {
 $error = null;
 $success = null;
 
-// Fetch Amazon market from DB
-$amazon_stmt = $pdo->query("SELECT * FROM markets WHERE slug = 'amazon' LIMIT 1");
-$amazon_market = $amazon_stmt->fetch();
-
-// If Amazon market is not found, automatically recreate it
-if (!$amazon_market) {
-    try {
-        $pdo->exec("INSERT INTO markets (name, slug, logo, description, category_id, is_popular, scraper_active) 
-                    VALUES ('Amazon', 'amazon', 'amazon.png', 'Amazon Türkiye güncel indirimleri, aktüel ürünleri ve kampanya broşürleri.', 1, 1, 0)");
-        $amazon_stmt = $pdo->query("SELECT * FROM markets WHERE slug = 'amazon' LIMIT 1");
-        $amazon_market = $amazon_stmt->fetch();
-    } catch (PDOException $e) {
-        $error = "Amazon marketi oluşturulamadı: " . $e->getMessage();
+function amazon_ensure_market(PDO $pdo): array {
+    $stmt = $pdo->query("SELECT * FROM markets WHERE slug = 'amazon' LIMIT 1");
+    $market = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($market) {
+        return $market;
     }
+
+    $pdo->exec("INSERT INTO markets (name, slug, logo, description, category_id, is_popular, scraper_active)
+                VALUES ('Amazon', 'amazon', 'amazon.png', 'Amazon affiliate ürün fırsatları ve kampanyaları.', 3, 1, 0)");
+    $stmt = $pdo->query("SELECT * FROM markets WHERE slug = 'amazon' LIMIT 1");
+    return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-// Fetch all markets for dropdown
-$markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
-
-// Text normalization helper for drawing on JPEGs (ASCII conversion to prevent character rendering anomalies)
-function tr_to_ascii($str) {
-    $map = [
-        'ç' => 'c', 'Ç' => 'C', 'ğ' => 'g', 'Ğ' => 'G', 'ı' => 'i', 'I' => 'I', 'İ' => 'I',
-        'ö' => 'o', 'Ö' => 'O', 'ş' => 's', 'Ş' => 'S', 'ü' => 'u', 'Ü' => 'U',
-        'â' => 'a', 'î' => 'i', 'û' => 'u'
-    ];
-    return strtr($str, $map);
-}
-
-// Download image using cURL
-function download_image_data($url) {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 20,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_USERAGENT => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    ]);
-    $data = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    return ($code === 200) ? $data : null;
-}
-
-// Scrape HTML from Amazon
-function fetch_amazon_page($url) {
+function amazon_fetch(string $url): array {
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS => 3,
-        CURLOPT_TIMEOUT => 25,
+        CURLOPT_MAXREDIRS => 8,
+        CURLOPT_TIMEOUT => 30,
         CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING => '',
         CURLOPT_HTTPHEADER => [
-            'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
             'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language: tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Language: tr-TR,tr;q=0.9,en-US;q=0.7,en;q=0.6',
             'Cache-Control: no-cache',
             'Pragma: no-cache',
-        ]
+        ],
     ]);
-    $res = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($code === 200 && $res && !str_contains($res, 'Robot Check') && !str_contains($res, 'captcha')) {
-        return $res;
+
+    $html = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $final_url = (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+    $err = curl_error($ch);
+
+    return [
+        'html' => ($code >= 200 && $code < 400 && is_string($html)) ? $html : '',
+        'code' => $code,
+        'final_url' => $final_url ?: $url,
+        'error' => $err,
+    ];
+}
+
+function amazon_extract_asin(string $url): string {
+    $decoded = urldecode($url);
+    $patterns = [
+        '~/(?:dp|gp/product|product)/([A-Z0-9]{10})(?:[/?#]|$)~i',
+        '~/(B[A-Z0-9]{9})(?:[/?#]|$)~i',
+        '~[?&]asin=([A-Z0-9]{10})~i',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $decoded, $m)) {
+            return strtoupper($m[1]);
+        }
+    }
+
+    return '';
+}
+
+function amazon_abs_url(string $url, string $base): string {
+    $url = trim(html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    if ($url === '') return '';
+    if (str_starts_with($url, '//')) return 'https:' . $url;
+    if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) return $url;
+    $parts = parse_url($base);
+    $origin = ($parts['scheme'] ?? 'https') . '://' . ($parts['host'] ?? 'www.amazon.com.tr');
+    if (str_starts_with($url, '/')) return $origin . $url;
+    return rtrim($origin, '/') . '/' . ltrim($url, '/');
+}
+
+function amazon_meta(DOMXPath $xp, string $name): string {
+    $queries = [
+        '//meta[@property="' . $name . '"]/@content',
+        '//meta[@name="' . $name . '"]/@content',
+    ];
+    foreach ($queries as $query) {
+        $node = $xp->query($query)->item(0);
+        if ($node) {
+            return trim(html_entity_decode($node->nodeValue, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        }
+    }
+    return '';
+}
+
+function amazon_first_text(DOMXPath $xp, array $queries): string {
+    foreach ($queries as $query) {
+        $node = $xp->query($query)->item(0);
+        if ($node && trim($node->textContent) !== '') {
+            return trim(preg_replace('/\s+/', ' ', html_entity_decode($node->textContent, ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+        }
+    }
+    return '';
+}
+
+function amazon_first_attr(DOMXPath $xp, array $queries, string $attr): string {
+    foreach ($queries as $query) {
+        $node = $xp->query($query)->item(0);
+        if ($node instanceof DOMElement) {
+            $value = trim($node->getAttribute($attr));
+            if ($value !== '') return $value;
+        }
+    }
+    return '';
+}
+
+function amazon_dynamic_image(DOMXPath $xp): string {
+    $img = $xp->query('//*[@id="landingImage"] | //img[@data-a-dynamic-image]')->item(0);
+    if (!$img instanceof DOMElement) return '';
+
+    $dynamic = $img->getAttribute('data-a-dynamic-image');
+    if ($dynamic !== '') {
+        $decoded = json_decode(html_entity_decode($dynamic, ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
+        if (is_array($decoded) && $decoded) {
+            return (string)array_key_first($decoded);
+        }
+    }
+
+    foreach (['data-old-hires', 'src'] as $attr) {
+        $value = trim($img->getAttribute($attr));
+        if ($value !== '' && !str_contains($value, 'transparent-pixel')) {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+function amazon_jsonld_products(DOMXPath $xp): array {
+    $products = [];
+    foreach ($xp->query('//script[@type="application/ld+json"]') as $script) {
+        $raw = trim($script->textContent);
+        if ($raw === '') continue;
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) continue;
+
+        $stack = [$decoded];
+        while ($stack) {
+            $item = array_pop($stack);
+            if (!is_array($item)) continue;
+
+            $type = $item['@type'] ?? '';
+            $types = is_array($type) ? $type : [$type];
+            if (in_array('Product', $types, true)) {
+                $products[] = $item;
+            }
+
+            foreach (['@graph', 'itemListElement'] as $key) {
+                if (isset($item[$key]) && is_array($item[$key])) {
+                    foreach ($item[$key] as $child) {
+                        $stack[] = $child;
+                    }
+                }
+            }
+        }
+    }
+    return $products;
+}
+
+function amazon_jsonld_value(array $products, string $field): string {
+    foreach ($products as $product) {
+        if (!empty($product[$field])) {
+            $value = $product[$field];
+            if (is_array($value)) {
+                $value = reset($value);
+            }
+            if (is_string($value) || is_numeric($value)) {
+                return trim((string)$value);
+            }
+        }
+    }
+    return '';
+}
+
+function amazon_jsonld_offer_price(array $products): ?float {
+    foreach ($products as $product) {
+        $offers = $product['offers'] ?? null;
+        if (!$offers) continue;
+        if (isset($offers['price'])) {
+            return mi_parse_price($offers['price']);
+        }
+        if (is_array($offers)) {
+            foreach ($offers as $offer) {
+                if (is_array($offer) && isset($offer['price'])) {
+                    return mi_parse_price($offer['price']);
+                }
+            }
+        }
     }
     return null;
 }
 
-// Helper to parse price float
-function clean_amazon_price($value) {
-    if ($value === null) return null;
-    $text = trim((string)$value);
-    if ($text === '') return null;
-    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    
-    // Extract numbers, comma and dots
-    $text = preg_replace('/[^0-9,.]+/u', '', $text) ?? '';
-    if ($text === '') return null;
-
-    // Clean duplicate separators (e.g. ,, or ..)
-    $text = preg_replace('/[,.]{2,}/u', ',', $text) ?? $text;
-
-    if (str_contains($text, ',') && str_contains($text, '.')) {
-        if (strpos($text, ',') < strpos($text, '.')) {
-            $text = str_replace(',', '', $text);
-        } else {
-            $text = str_replace('.', '', $text);
-            $text = str_replace(',', '.', $text);
+function amazon_jsonld_rating(array $products): array {
+    foreach ($products as $product) {
+        $rating = $product['aggregateRating'] ?? null;
+        if (is_array($rating)) {
+            return [
+                'rating' => isset($rating['ratingValue']) ? (string)$rating['ratingValue'] : '',
+                'review_count' => isset($rating['reviewCount']) ? (string)$rating['reviewCount'] : '',
+            ];
         }
-    } elseif (str_contains($text, ',')) {
-        $text = str_replace(',', '.', $text);
     }
-
-    if (substr_count($text, '.') > 1) {
-        $parts = explode('.', $text);
-        $last = array_pop($parts);
-        $text = implode('', $parts) . '.' . $last;
-    }
-
-    return is_numeric($text) ? (float)$text : null;
+    return ['rating' => '', 'review_count' => ''];
 }
 
-// Helper to extract the actual product image URL (bypassing lazy loading attributes)
-function get_amazon_image_url($img_node) {
-    if (!$img_node) return '';
-    
-    $attrs = ['data-src', 'data-lazy-src', 'data-old-hires', 'src'];
-    foreach ($attrs as $attr) {
-        $val = trim($img_node->getAttribute($attr));
-        if ($val && !str_contains($val, 'transparent-pixel') && !str_contains($val, '1x1.gif') && !str_contains($val, 'data:image')) {
-            return $val;
+function amazon_bullet_summary(DOMXPath $xp): string {
+    $parts = [];
+    foreach ($xp->query('//*[@id="feature-bullets"]//li//span[normalize-space()]') as $node) {
+        $text = trim(preg_replace('/\s+/', ' ', $node->textContent));
+        if ($text !== '' && !str_contains($text, 'Daha fazla bilgi')) {
+            $parts[] = $text;
         }
+        if (count($parts) >= 2) break;
     }
-    
-    $dyn = trim($img_node->getAttribute('data-a-dynamic-image'));
-    if ($dyn) {
-        $decoded = json_decode($dyn, true);
-        if (is_array($decoded) && !empty($decoded)) {
-            return key($decoded);
-        }
-    }
-
-    return trim($img_node->getAttribute('src'));
+    return implode(' ', $parts);
 }
 
-// HTML Product Parser
-function parse_amazon_products($html, $url_base = 'https://www.amazon.com.tr') {
+function amazon_parse_product(string $html, string $requested_url, string $final_url): array {
+    if (stripos($html, 'Robot Check') !== false || stripos($html, 'captcha') !== false) {
+        throw new RuntimeException('Amazon bot/CAPTCHA koruması döndürdü. Linke tarayıcıdan erişilebildiğini kontrol edip tekrar deneyin.');
+    }
+
     libxml_use_internal_errors(true);
     $doc = new DOMDocument();
     $doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
     $xp = new DOMXPath($doc);
-    $products = [];
+    $json_products = amazon_jsonld_products($xp);
 
-    // Layout 1: Search Result items
-    $items = $xp->query('//div[@data-asin and @data-component-type="s-search-result"] | //div[contains(@class, "s-result-item") and @data-asin != ""]');
-    if ($items->length > 0) {
-        foreach ($items as $item) {
-            $title_queries = [
-                './/h2//a//span',
-                './/span[contains(@class, "a-size-base-plus")]',
-                './/span[contains(@class, "a-size-medium")]',
-                './/span[contains(@class, "a-text-normal")]',
-                './/h2//span',
-                './/h2//a',
-                './/a/span',
-                './/div[contains(@class, "p13n-sc-truncate")]'
-            ];
-            $title = '';
-            foreach ($title_queries as $q) {
-                $node = $xp->query($q, $item)->item(0);
-                if ($node && trim($node->textContent) !== '') {
-                    $title = trim($node->textContent);
-                    break;
-                }
-            }
-            
-            $price_node = $xp->query('.//span[contains(@class, "a-price-whole")]', $item)->item(0);
-            $price_fraction = $xp->query('.//span[contains(@class, "a-price-fraction")]', $item)->item(0);
-            
-            $price = null;
-            if ($price_node) {
-                $raw_price = trim($price_node->textContent);
-                if ($price_fraction) {
-                    $raw_price .= ',' . trim($price_fraction->textContent);
-                }
-                $price = clean_amazon_price($raw_price);
-            } else {
-                $offscreen = $xp->query('.//span[contains(@class, "a-price")]//span[contains(@class, "a-offscreen")]', $item)->item(0);
-                if ($offscreen) {
-                    $price = clean_amazon_price($offscreen->textContent);
-                }
-            }
+    $title = amazon_first_text($xp, [
+        '//*[@id="productTitle"]',
+        '//span[contains(@class, "product-title-word-break")]',
+        '//h1',
+    ]);
+    if ($title === '') {
+        $title = amazon_jsonld_value($json_products, 'name') ?: amazon_meta($xp, 'og:title') ?: amazon_meta($xp, 'twitter:title');
+    }
+    $title = trim(preg_replace('/\s*\|\s*Amazon.*$/iu', '', $title));
 
-            $img_node = $xp->query('.//img[contains(@class, "s-image")] | .//img', $item)->item(0);
-            $image_url = get_amazon_image_url($img_node);
+    $price = amazon_jsonld_offer_price($json_products);
+    if ($price === null) {
+        $price_text = amazon_meta($xp, 'product:price:amount') ?: amazon_first_text($xp, [
+            '//*[@id="corePrice_feature_div"]//*[contains(@class, "a-offscreen")]',
+            '//*[@id="priceblock_ourprice"]',
+            '//*[@id="priceblock_dealprice"]',
+            '//*[contains(@class, "a-price")]//*[contains(@class, "a-offscreen")]',
+        ]);
+        $price = mi_parse_price($price_text);
+    }
 
-            $link_node = $xp->query('.//a[contains(@class, "a-link-normal")]', $item)->item(0);
-            $prod_url = $link_node ? $link_node->getAttribute('href') : '';
-            if ($prod_url && !str_starts_with($prod_url, 'http')) {
-                $prod_url = rtrim($url_base, '/') . '/' . ltrim($prod_url, '/');
-            }
+    $image = amazon_jsonld_value($json_products, 'image') ?: amazon_meta($xp, 'og:image') ?: amazon_dynamic_image($xp);
+    if (is_string($image) && str_starts_with($image, '[')) {
+        $decoded = json_decode($image, true);
+        if (is_array($decoded)) $image = (string)reset($decoded);
+    }
+    $image = amazon_abs_url((string)$image, $final_url);
 
-            if ($title && $price && $image_url) {
-                $products[] = [
-                    'title' => $title,
-                    'price' => $price,
-                    'image_url' => $image_url,
-                    'product_url' => $prod_url
-                ];
-            }
+    $rating_data = amazon_jsonld_rating($json_products);
+    $rating = $rating_data['rating'];
+    if ($rating === '') {
+        $rating_text = amazon_first_attr($xp, ['//*[@id="acrPopover"]'], 'title')
+            ?: amazon_first_text($xp, ['//*[contains(@class, "a-icon-alt")]']);
+        if (preg_match('/(\d+(?:[.,]\d+)?)/u', $rating_text, $m)) {
+            $rating = str_replace(',', '.', $m[1]);
         }
     }
 
-    // Layout 2: Deal cards / Grid cards
-    if (empty($products)) {
-        $items = $xp->query('//div[@data-testid="grid-deal-card"] | //div[contains(@class, "DealCard-module")] | //div[contains(@class, "deal-card")]');
-        foreach ($items as $item) {
-            $title_queries = [
-                './/div[contains(@class, "dealTitle")]',
-                './/span[contains(@class, "a-truncate-full")]',
-                './/a/span',
-                './/span[contains(@class, "a-text-normal")]'
-            ];
-            $title = '';
-            foreach ($title_queries as $q) {
-                $node = $xp->query($q, $item)->item(0);
-                if ($node && trim($node->textContent) !== '') {
-                    $title = trim($node->textContent);
-                    break;
-                }
-            }
-
-            $price_node = $xp->query('.//span[contains(@class, "a-price-whole")] | .//div[contains(@class, "priceWithDiscount")] | .//span[contains(@class, "a-offscreen")]', $item)->item(0);
-            $price = $price_node ? clean_amazon_price($price_node->textContent) : null;
-
-            $img_node = $xp->query('.//img', $item)->item(0);
-            $image_url = get_amazon_image_url($img_node);
-
-            $link_node = $xp->query('.//a', $item)->item(0);
-            $prod_url = $link_node ? $link_node->getAttribute('href') : '';
-            if ($prod_url && !str_starts_with($prod_url, 'http')) {
-                $prod_url = rtrim($url_base, '/') . '/' . ltrim($prod_url, '/');
-            }
-
-            if ($title && $price && $image_url) {
-                $products[] = [
-                    'title' => $title,
-                    'price' => $price,
-                    'image_url' => $image_url,
-                    'product_url' => $prod_url
-                ];
-            }
-        }
+    $review_count = $rating_data['review_count'];
+    if ($review_count === '') {
+        $review_count = amazon_first_text($xp, ['//*[@id="acrCustomerReviewText"]']);
+        $review_count = trim(preg_replace('/[^0-9.]+/', '', $review_count));
     }
 
-    // Layout 3: General tag extraction scanner
-    if (empty($products)) {
-        $imgs = $xp->query('//img[contains(@src, "/images/I/") or contains(@data-src, "/images/I/") or contains(@data-lazy-src, "/images/I/") or contains(@data-a-dynamic-image, "/images/I/")]');
-        foreach ($imgs as $img) {
-            $src = get_amazon_image_url($img);
-            if (!$src) continue;
+    $description = amazon_bullet_summary($xp);
+    if ($description === '') {
+        $description = amazon_jsonld_value($json_products, 'description') ?: amazon_meta($xp, 'description');
+    }
+    $description = mb_substr(trim(preg_replace('/\s+/', ' ', $description)), 0, 280, 'UTF-8');
 
-            $parent = $img->parentNode;
-            $title = '';
-            $price = null;
-            $prod_url = '';
-
-            for ($depth = 0; $depth < 5; $depth++) {
-                if (!$parent) break;
-
-                if ($price === null) {
-                    $p_node = $xp->query('.//span[contains(@class, "a-price-whole")] | .//span[contains(@class, "a-offscreen")]', $parent)->item(0);
-                    if ($p_node) {
-                        $price = clean_amazon_price($p_node->textContent);
-                    } else {
-                        $spans = $xp->query('.//span | .//div', $parent);
-                        foreach ($spans as $span) {
-                            if (preg_match('/(\d+(?:[.,]\d+)?)\s*(?:TL|₺)/u', $span->textContent, $pm)) {
-                                $price = clean_amazon_price($pm[0]);
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if ($title === '') {
-                    $title_queries = [
-                        './/h2',
-                        './/h3',
-                        './/span[contains(@class, "a-text-normal")]',
-                        './/div[contains(@class, "title")]',
-                        './/div[contains(@class, "p13n-sc-truncate")]'
-                    ];
-                    foreach ($title_queries as $q) {
-                        $t_node = $xp->query($q, $parent)->item(0);
-                        if ($t_node && trim($t_node->textContent) !== '') {
-                            $title = trim($t_node->textContent);
-                            break;
-                        }
-                    }
-                }
-
-                if ($prod_url === '') {
-                    $l_node = $xp->query('.//a[contains(@href, "/dp/") or contains(@href, "/gp/")]', $parent)->item(0);
-                    if ($l_node) {
-                        $prod_url = $l_node->getAttribute('href');
-                        if (!str_starts_with($prod_url, 'http')) {
-                            $prod_url = rtrim($url_base, '/') . '/' . ltrim($prod_url, '/');
-                        }
-                    }
-                }
-                $parent = $parent->parentNode;
-            }
-
-            if ($title && $price && $src) {
-                $products[] = [
-                    'title' => $title,
-                    'price' => $price,
-                    'image_url' => $src,
-                    'product_url' => $prod_url
-                ];
-            }
-        }
+    $asin = amazon_extract_asin($final_url) ?: amazon_extract_asin($requested_url);
+    if ($title === '' || $image === '') {
+        throw new RuntimeException('Ürün adı veya görseli okunamadı. Amazon sayfası bot koruması, geçersiz link veya desteklenmeyen sayfa yapısı döndürmüş olabilir.');
     }
 
-    // Deduplicate list
-    $unique = [];
-    foreach ($products as $p) {
-        $key = trim(strtolower($p['title']));
-        if (!isset($unique[$key])) {
-            $unique[$key] = $p;
-        }
-    }
-    return array_values($unique);
+    return [
+        'asin' => $asin,
+        'title' => $title,
+        'price' => $price,
+        'image_url' => $image,
+        'rating' => $rating,
+        'review_count' => $review_count,
+        'description' => $description,
+        'affiliate_url' => $requested_url,
+        'final_url' => $final_url,
+    ];
 }
 
-// Generate the physical Grid JPEGs from products array using GD
-function compile_amazon_page_image($page_products, $dest_file) {
-    $width = 1200;
-    $height = 1600;
-    $cols = 3;
-    $cell_w = 400;
-    $cell_h = 400;
-
-    $im = imagecreatetruecolor($width, $height);
-    if (!$im) return false;
-
-    // Allocate colors
-    $bg_color = imagecolorallocate($im, 248, 250, 252); // bg-slate-50
-    $card_bg = imagecolorallocate($im, 255, 255, 255); // White card
-    $border_color = imagecolorallocate($im, 226, 232, 240); // slate-200
-    $text_dark = imagecolorallocate($im, 15, 23, 42); // slate-900
-    $orange_color = imagecolorallocate($im, 255, 153, 0); // Amazon Orange (#FF9900)
-    $white_text = imagecolorallocate($im, 255, 255, 255);
-
-    imagefill($im, 0, 0, $bg_color);
-
-    foreach ($page_products as $idx => $p) {
-        $col = $idx % $cols;
-        $row = floor($idx / $cols);
-        $cx = $col * $cell_w;
-        $cy = $row * $cell_h;
-
-        // 1. Draw Card Background
-        imagefilledrectangle($im, $cx + 15, $cy + 15, $cx + $cell_w - 15, $cy + $cell_h - 15, $card_bg);
-        imagerectangle($im, $cx + 15, $cy + 15, $cx + $cell_w - 15, $cy + $cell_h - 15, $border_color);
-
-        // 2. Fetch and Draw Product Image
-        $img_data = download_image_data($p['image_url']);
-        if ($img_data) {
-            $p_img = imagecreatefromstring($img_data);
-            if ($p_img) {
-                $pw = imagesx($p_img);
-                $ph = imagesy($p_img);
-
-                // Max bounds for scaled product image: 320x260
-                $max_w = 320;
-                $max_h = 260;
-                
-                $ratio = min($max_w / $pw, $max_h / $ph);
-                $sw = (int)($pw * $ratio);
-                $sh = (int)($ph * $ratio);
-
-                $dx = $cx + 40 + (int)(($max_w - $sw) / 2);
-                $dy = $cy + 30 + (int)(($max_h - $sh) / 2);
-
-                imagecopyresampled($im, $p_img, $dx, $dy, 0, 0, $sw, $sh, $pw, $ph);
-                imagedestroy($p_img);
-            }
-        }
-
-        // 3. Draw Title (Normalized ASCII text to prevent encoding problems)
-        $clean_title = tr_to_ascii($p['title']);
-        if (strlen($clean_title) > 28) {
-            $clean_title = substr($clean_title, 0, 25) . '...';
-        }
-        // imagestring font sizes: 1 to 5. font 3 is clear
-        imagestring($im, 3, $cx + 30, $cy + 310, $clean_title, $text_dark);
-
-        // 4. Draw Price Badge
-        $price_str = number_format($p['price'], 2, ',', '.') . ' TL';
-        imagefilledrectangle($im, $cx + 30, $cy + 340, $cx + 210, $cy + 372, $orange_color);
-        
-        // Center text in badge
-        $char_w = 7; // approximate width of font 3 character
-        $text_w = strlen($price_str) * $char_w;
-        $tx = $cx + 30 + (int)((180 - $text_w) / 2);
-        imagestring($im, 3, $tx, $cy + 350, $price_str, $white_text);
+function amazon_download_image(string $url, string $source_key): ?string {
+    $safe_key = preg_replace('/[^a-z0-9]+/i', '-', strtolower($source_key)) ?: md5($url);
+    $path = parse_url($url, PHP_URL_PATH) ?: '';
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+        $ext = 'jpg';
     }
 
-    $ok = imagejpeg($im, $dest_file, 85);
-    imagedestroy($im);
-    return $ok;
+    $file_name = 'amazon-' . $safe_key . '-' . time() . '.' . $ext;
+    $dest = dirname(__DIR__) . '/uploads/brochures/' . $file_name;
+    if (!is_dir(dirname($dest))) {
+        mkdir(dirname($dest), 0755, true);
+    }
+
+    $fp = fopen($dest, 'wb');
+    if (!$fp) return null;
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_FILE => $fp,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 5,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_HTTPHEADER => [
+            'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+            'Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            'Referer: https://www.amazon.com.tr/',
+        ],
+    ]);
+    $ok = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    fclose($fp);
+
+    if (!$ok || $code >= 400 || !is_file($dest) || filesize($dest) < 500) {
+        @unlink($dest);
+        return null;
+    }
+
+    return $file_name;
 }
 
-// Form Submission handling
-if (isset($_POST['import'])) {
-    $market_id = intval($_POST['market_id'] ?? 0);
-    $title = trim($_POST['title'] ?? '');
-    $start_date = trim($_POST['start_date'] ?? '');
-    $end_date = trim($_POST['end_date'] ?? '');
-    $import_url = trim($_POST['import_url'] ?? '');
-    $pasted_html = trim($_POST['pasted_html'] ?? '');
+function amazon_source_uid(array $product): string {
+    if (!empty($product['asin'])) {
+        return 'amazon:' . $product['asin'];
+    }
+    return 'amazon:' . md5(($product['final_url'] ?? '') . '|' . ($product['affiliate_url'] ?? ''));
+}
+
+$amazon_market = amazon_ensure_market($pdo);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import'])) {
+    $affiliate_url = trim((string)($_POST['affiliate_url'] ?? ''));
+    $start_date = trim((string)($_POST['start_date'] ?? date('Y-m-d')));
+    $end_date = trim((string)($_POST['end_date'] ?? date('Y-m-d', strtotime('+14 days'))));
     $show_on_homepage = isset($_POST['show_on_homepage']) ? 1 : 0;
 
-    if ($market_id === 0) {
-        $error = "Lütfen bir market seçin.";
-    } elseif (empty($title)) {
-        $error = "Lütfen broşür için bir başlık belirtin.";
-    } elseif (empty($import_url) && empty($pasted_html)) {
-        $error = "Lütfen bir Amazon linki girin ya da sayfa kaynağını (HTML) yapıştırın.";
+    if ($affiliate_url === '' || !filter_var($affiliate_url, FILTER_VALIDATE_URL)) {
+        $error = 'Lütfen geçerli bir Amazon affiliate ürün linki girin.';
     } else {
-        $html = '';
-        if (!empty($pasted_html)) {
-            $html = $pasted_html;
-        } else {
-            $html = fetch_amazon_page($import_url);
-            if (!$html) {
-                $error = "Amazon otomatik erişimi engelledi (Robot/CAPTCHA doğrulaması). Lütfen Amazon sayfasına tarayıcınızdan gidip sayfa kaynağını kopyalayın ve aşağıdaki 'Sayfa Kaynağı' alanına yapıştırarak tekrar deneyin.";
+        try {
+            $fetch = amazon_fetch($affiliate_url);
+            if ($fetch['html'] === '') {
+                throw new RuntimeException('Amazon sayfası alınamadı. HTTP: ' . $fetch['code'] . ($fetch['error'] ? ' - ' . $fetch['error'] : ''));
             }
-        }
 
-        if (empty($error)) {
-            $products = parse_amazon_products($html);
-            $p_count = count($products);
-            
-            if ($p_count === 0) {
-                $error = "HTML içeriğinden herhangi bir ürün bilgisi ayıklanamadı. Lütfen yapıştırdığınız kodun tam sayfa kaynağı (HTML) olduğundan ve ürün listesi içerdiğinden emin olun.";
-            } else {
-                try {
-                    $pdo->beginTransaction();
+            $product = amazon_parse_product($fetch['html'], $affiliate_url, $fetch['final_url']);
+            $source_uid = amazon_source_uid($product);
+            $cover_image = amazon_download_image($product['image_url'], $product['asin'] ?: md5($product['image_url'])) ?: $product['image_url'];
 
-                    if (empty($start_date)) $start_date = date('Y-m-d');
-                    if (empty($end_date)) $end_date = date('Y-m-d', strtotime('+7 days'));
+            $pdo->beginTransaction();
 
-                    // We will set a temporary cover, and replace it once generated
-                    $cover_image = 'uploads/brochures/placeholder_cover.png';
-                    $stmt = $pdo->prepare("INSERT INTO brochures (market_id, title, cover_image, start_date, end_date, show_on_homepage, analyzed_at, source_name, source_url) 
-                                           VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'amazon', ?)");
-                    $stmt->execute([$market_id, $title, $cover_image, $start_date, $end_date, $show_on_homepage, $import_url]);
-                    $brochure_id = $pdo->lastInsertId();
+            $existing = $pdo->prepare("SELECT id, cover_image FROM brochures WHERE source_uid = ? LIMIT 1");
+            $existing->execute([$source_uid]);
+            $existing_row = $existing->fetch(PDO::FETCH_ASSOC);
+            $brochure_id = $existing_row ? (int)$existing_row['id'] : 0;
 
-                    // Group products by 12 items per page
-                    $chunked_products = array_chunk($products, 12);
-                    $total_pages = count($chunked_products);
-                    
-                    if (!is_dir('../uploads/brochures')) {
-                        mkdir('../uploads/brochures', 0755, true);
-                    }
-
-                    $generated_pages = 0;
-                    foreach ($chunked_products as $p_idx => $page_products) {
-                        $page_num = $p_idx + 1;
-                        $filename = 'amazon-' . $brochure_id . '-' . $page_num . '-' . time() . '.jpg';
-                        $dest_path = '../uploads/brochures/' . $filename;
-                        $db_path = 'uploads/brochures/' . $filename;
-
-                        // Compile image grid
-                        if (compile_amazon_page_image($page_products, $dest_path)) {
-                            // Insert page
-                            $p_stmt = $pdo->prepare("INSERT INTO brochure_pages (brochure_id, page_number, image_path) VALUES (?, ?, ?)");
-                            $p_stmt->execute([$brochure_id, $page_num, $db_path]);
-
-                            // Insert products hotspots coordinates (each grid cell has a predefined hotspot)
-                            $prod_stmt = $pdo->prepare("INSERT INTO brochure_products (brochure_id, page_number, product_name, price, original_price, unit, x_pct, y_pct, w_pct, h_pct, analyzed_at) 
-                                                        VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
-                            
-                            foreach ($page_products as $c_idx => $prod) {
-                                $col = $c_idx % 3;
-                                $row = floor($c_idx / 3);
-                                
-                                $x_pct = round((($col * 400) + 15) / 1200 * 100, 3);
-                                $y_pct = round((($row * 400) + 15) / 1600 * 100, 3);
-                                $w_pct = round(370 / 1200 * 100, 3);
-                                $h_pct = round(370 / 1600 * 100, 3);
-
-                                $prod_stmt->execute([
-                                    $brochure_id, 
-                                    $page_num, 
-                                    $prod['title'], 
-                                    $prod['price'], 
-                                    $x_pct, 
-                                    $y_pct, 
-                                    $w_pct, 
-                                    $h_pct
-                                ]);
-                            }
-
-                            // Update brochure cover image with the first page
-                            if ($page_num === 1) {
-                                $cover_image = $db_path;
-                                $up_stmt = $pdo->prepare("UPDATE brochures SET cover_image = ? WHERE id = ?");
-                                $up_stmt->execute([$cover_image, $brochure_id]);
-                            }
-
-                            $generated_pages++;
-                        }
-                    }
-
-                    if ($generated_pages > 0) {
-                        $pdo->commit();
-                        $success = "Başarılı! Toplam $p_count adet Amazon ürünü başarıyla içe aktarıldı ve $generated_pages sayfalık interaktif broşür oluşturuldu. <a href='../viewer.php?id=$brochure_id' target='_blank' class='underline font-bold text-white ml-2'>Broşürü Görüntüle &raquo;</a>";
-                    } else {
-                        $pdo->rollBack();
-                        $error = "Broşür resimleri oluşturulurken bir hata oluştu.";
-                    }
-                } catch (Exception $e) {
-                    $pdo->rollBack();
-                    $error = "Veritabanı kayıt hatası: " . $e->getMessage();
+            if ($brochure_id > 0) {
+                $old_cover = (string)($existing_row['cover_image'] ?? '');
+                if ($old_cover !== '' && !str_starts_with($old_cover, 'http') && $old_cover !== $cover_image) {
+                    $old_path = dirname(__DIR__) . '/' . mi_brochure_cover_src($old_cover);
+                    if (is_file($old_path)) @unlink($old_path);
                 }
+
+                $stmt = $pdo->prepare("
+                    UPDATE brochures
+                    SET market_id = ?, title = ?, cover_image = ?, start_date = ?, end_date = ?,
+                        show_on_homepage = ?, analyzed_at = CURRENT_TIMESTAMP,
+                        source_name = 'amazon', source_url = ?, source_uid = ?
+                    WHERE id = ?
+                ");
+                $stmt->execute([
+                    $amazon_market['id'],
+                    $product['title'],
+                    $cover_image,
+                    $start_date ?: date('Y-m-d'),
+                    $end_date ?: date('Y-m-d', strtotime('+14 days')),
+                    $show_on_homepage,
+                    $affiliate_url,
+                    $source_uid,
+                    $brochure_id,
+                ]);
+                $pdo->prepare("DELETE FROM brochure_products WHERE brochure_id = ?")->execute([$brochure_id]);
+                $action = 'güncellendi';
+            } else {
+                $stmt = $pdo->prepare("
+                    INSERT INTO brochures
+                        (market_id, title, cover_image, start_date, end_date, show_on_homepage, analyzed_at, source_name, source_url, source_uid)
+                    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'amazon', ?, ?)
+                ");
+                $stmt->execute([
+                    $amazon_market['id'],
+                    $product['title'],
+                    $cover_image,
+                    $start_date ?: date('Y-m-d'),
+                    $end_date ?: date('Y-m-d', strtotime('+14 days')),
+                    $show_on_homepage,
+                    $affiliate_url,
+                    $source_uid,
+                ]);
+                $brochure_id = (int)$pdo->lastInsertId();
+                $action = 'oluşturuldu';
             }
+
+            $product_stmt = $pdo->prepare("
+                INSERT INTO brochure_products
+                    (brochure_id, page_number, product_name, price, product_url, product_image, rating, review_count, description, analyzed_at)
+                VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ");
+            $product_stmt->execute([
+                $brochure_id,
+                $product['title'],
+                $product['price'],
+                $affiliate_url,
+                $cover_image,
+                $product['rating'],
+                $product['review_count'],
+                $product['description'],
+            ]);
+
+            $pdo->commit();
+            $price_text = mi_price_label($product['price']) ?: 'Fiyat okunamadı';
+            $success = 'Amazon ürün kartı ' . $action . ': <strong>' . htmlspecialchars($product['title']) . '</strong> (' . htmlspecialchars($price_text) . '). '
+                . '<a href="../index.php?market=' . (int)$amazon_market['id'] . '" target="_blank" class="underline font-bold text-white ml-1">Sitede görüntüle</a>';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $error = $e->getMessage();
         }
     }
 }
@@ -545,8 +476,6 @@ if (isset($_POST['import'])) {
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 flex min-h-screen">
-
-    <!-- Sidebar -->
     <aside class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
         <div class="p-6 border-b border-slate-800">
             <a href="index.php" class="font-title text-xl font-black text-white flex items-center gap-2">
@@ -600,13 +529,15 @@ if (isset($_POST['import'])) {
         </div>
     </aside>
 
-    <!-- Main Content -->
     <main class="flex-1 flex flex-col overflow-y-auto">
         <header class="h-20 bg-slate-900/40 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-8 shrink-0">
-            <h1 class="font-title text-2xl font-bold text-white">Amazon Broşür Oluşturucu</h1>
+            <div>
+                <h1 class="font-title text-2xl font-bold text-white">Amazon Broşür Oluşturucu</h1>
+                <p class="text-sm text-slate-400 mt-1">Affiliate ürün linkinden sitede görünen satın alma kartı oluşturur.</p>
+            </div>
         </header>
 
-        <div class="p-8 max-w-4xl w-full mx-auto space-y-6">
+        <div class="p-8 max-w-3xl w-full mx-auto space-y-6">
             <?php if ($success): ?>
                 <div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm p-4 rounded-2xl flex items-start gap-3">
                     <span class="material-symbols-outlined text-emerald-400 mt-0.5">check_circle</span>
@@ -616,86 +547,57 @@ if (isset($_POST['import'])) {
             <?php if ($error): ?>
                 <div class="bg-red-500/10 border border-red-500/30 text-red-200 text-sm p-4 rounded-2xl flex items-start gap-3">
                     <span class="material-symbols-outlined text-red-400 mt-0.5">error</span>
-                    <div><?= $error ?></div>
+                    <div><?= htmlspecialchars($error) ?></div>
                 </div>
             <?php endif; ?>
 
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+            <form method="POST" class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
                 <div class="border-b border-slate-800 pb-4">
                     <h2 class="font-title text-xl font-bold text-white flex items-center gap-2">
                         <span class="material-symbols-outlined text-amber-500">shopping_basket</span>
-                        Amazon İndirim Linki veya HTML Kodundan Broşür Üret
+                        Affiliate Linkinden Ürün Kartı Oluştur
                     </h2>
-                    <p class="text-xs text-slate-400 mt-1">
-                        Gireceğiniz bir Amazon arama/fırsat linkindeki ürünler veya yapıştıracağınız sayfa kaynağındaki (HTML) tüm indirimli ürünler otomatik olarak ayıklanır, görselleri çekilir ve 12'şerli kartlar halinde interaktif sayfalara dönüştürülür.
+                    <p class="text-sm text-slate-400 mt-2">
+                        Amazon ürün linkini ekleyin; sistem ürün adını, fiyatını, görselini, puanını ve kısa açıklamasını okuyup broşür listesinde satın alma butonlu kart olarak yayınlar.
                     </p>
                 </div>
 
-                <form method="POST" class="space-y-5">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Hedef Market</label>
-                            <select name="market_id" class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition text-sm">
-                                <?php foreach ($markets as $m): ?>
-                                    <option value="<?= $m['id'] ?>" <?= ($m['slug'] === 'amazon') ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($m['name']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Broşür Başlığı *</label>
-                            <input type="text" name="title" required value="Amazon Fırsat Kataloğu"
-                                   class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition text-sm"
-                                   placeholder="Örn: Amazon Haftalık Fırsatları">
-                        </div>
-                    </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Amazon Affiliate Ürün Linki *</label>
+                    <input type="url" name="affiliate_url" required value="<?= htmlspecialchars($_POST['affiliate_url'] ?? '') ?>"
+                           class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-3 outline-none transition text-sm"
+                           placeholder="https://www.amazon.com.tr/dp/... veya https://amzn.to/...">
+                    <p class="text-xs text-slate-500 mt-2">Aynı ürün tekrar eklenirse yeni kayıt açmak yerine mevcut Amazon kartı güncellenir.</p>
+                </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Başlangıç Tarihi</label>
-                            <input type="date" name="start_date" value="<?= date('Y-m-d') ?>"
-                                   class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Bitiş Tarihi</label>
-                            <input type="date" name="end_date" value="<?= date('Y-m-d', strtotime('+7 days')) ?>"
-                                   class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition text-sm">
-                        </div>
-                    </div>
-
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Amazon Sayfa URL'si</label>
-                        <input type="url" name="import_url"
-                               class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none transition text-sm"
-                               placeholder="Örn: https://www.amazon.com.tr/s?k=filtre+kahve">
-                        <p class="text-[10px] text-slate-500 mt-1">Sistem otomatik olarak bu adrese cURL ile bağlanmayı dener. Bot koruması devreye girerse aşağıdaki HTML alanını kullanın.</p>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Başlangıç Tarihi</label>
+                        <input type="date" name="start_date" value="<?= htmlspecialchars($_POST['start_date'] ?? date('Y-m-d')) ?>"
+                               class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-3 outline-none transition text-sm">
                     </div>
-
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Sayfa Kaynağı (HTML) - Bot Koruması Fallback</label>
-                        <textarea name="pasted_html" rows="8"
-                                  class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-2.5 outline-none font-mono text-xs transition"
-                                  placeholder="Tarayıcıda sayfaya gidip sağ tıklayın, 'Sayfa Kaynağını Görüntüle' diyerek tüm kodu kopyalayıp buraya yapıştırın..."></textarea>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Bitiş Tarihi</label>
+                        <input type="date" name="end_date" value="<?= htmlspecialchars($_POST['end_date'] ?? date('Y-m-d', strtotime('+14 days'))) ?>"
+                               class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-3 outline-none transition text-sm">
                     </div>
+                </div>
 
-                    <div class="flex items-center gap-2">
-                        <input type="checkbox" name="show_on_homepage" id="show_on_homepage" value="1" checked
-                               class="w-4 h-4 rounded bg-slate-950 border-slate-800 text-red-600 focus:ring-red-500 focus:ring-offset-slate-900">
-                        <label for="show_on_homepage" class="text-xs font-semibold text-slate-300">Anasayfada gösterilsin</label>
-                    </div>
+                <label class="inline-flex items-center gap-2 text-sm text-slate-300">
+                    <input type="checkbox" name="show_on_homepage" value="1" checked
+                           class="w-4 h-4 rounded bg-slate-950 border-slate-800 text-red-600 focus:ring-red-500 focus:ring-offset-slate-900">
+                    Anasayfada ve Amazon market sayfasında göster
+                </label>
 
-                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                        <button type="submit" name="import"
-                                class="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2.5 rounded-xl transition shadow-lg shadow-red-600/10 flex items-center gap-2">
-                            <span class="material-symbols-outlined text-lg">settings_suggest</span>
-                            Broşürü Çıkar ve Grid Sayfaları Oluştur
-                        </button>
-                    </div>
-                </form>
-            </div>
+                <div class="flex justify-end pt-4 border-t border-slate-800">
+                    <button type="submit" name="import"
+                            class="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-3 rounded-xl transition shadow-lg shadow-red-600/10 inline-flex items-center gap-2">
+                        <span class="material-symbols-outlined text-lg">auto_fix_high</span>
+                        Ürünü Çek ve Yayınla
+                    </button>
+                </div>
+            </form>
         </div>
     </main>
-
 </body>
 </html>

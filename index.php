@@ -46,6 +46,14 @@ $conditions[] = "b.show_on_homepage = 1 AND (
     OR (b.pdf_path IS NOT NULL AND b.pdf_path != '')
     OR (SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = b.id) > 0
 )";
+$conditions[] = "(COALESCE(b.source_name, '') <> 'amazon'
+    OR COALESCE(b.source_url, '') <> ''
+    OR EXISTS (
+        SELECT 1 FROM brochure_products bp_link
+        WHERE bp_link.brochure_id = b.id
+          AND COALESCE(bp_link.product_url, '') <> ''
+    )
+)";
 
 // Limit homepage to 1 newest brochure per market (based on the current tab's condition)
 // $subquery_cond = "AND b2.show_on_homepage = 1 AND ((b2.pdf_path IS NOT NULL AND b2.pdf_path != '') OR (SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = b2.id) > 0)";
@@ -79,10 +87,23 @@ if (!empty($search_query)) {
     $params[] = '%' . $search_query . '%';
 }
 
-$sql = "SELECT b.*, m.name as market_name, m.logo as market_logo,
+$sql = "SELECT b.*, m.name as market_name, m.logo as market_logo, m.slug as market_slug,
+               ap.product_name AS amazon_product_name,
+               ap.price AS amazon_product_price,
+               ap.product_url AS amazon_product_url,
+               ap.rating AS amazon_product_rating,
+               ap.review_count AS amazon_review_count,
+               ap.description AS amazon_product_description,
                CASE WHEN EXISTS (SELECT 1 FROM brochure_products bp WHERE bp.brochure_id = b.id) THEN 1 ELSE 0 END as has_ai_analysis
         FROM brochures b 
-        JOIN markets m ON b.market_id = m.id";
+        JOIN markets m ON b.market_id = m.id
+        LEFT JOIN brochure_products ap ON ap.id = (
+            SELECT bp_first.id
+            FROM brochure_products bp_first
+            WHERE bp_first.brochure_id = b.id
+            ORDER BY bp_first.id ASC
+            LIMIT 1
+        )";
 
 if (!empty($conditions)) {
     $sql .= " WHERE " . implode(" AND ", $conditions);
@@ -483,62 +504,7 @@ if (!function_exists('formatBlogDate')) {
                     foreach ($brochures as $b): 
                         $lazyLoading = ($bIndex < 4) ? 'fetchpriority="high" loading="eager"' : 'loading="lazy"';
                     ?>
-                        <div class="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 group cursor-pointer flex flex-col relative"
-                             onclick="window.location='viewer.php?id=<?= $b['id'] ?>'">
-                            
-                            <!-- Cover Image Container -->
-                            <div class="relative aspect-[3/4] bg-slate-900/5 overflow-hidden">
-                                <img src="uploads/brochures/<?= htmlspecialchars($b['cover_image']) ?>" 
-                                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                     alt=""
-                                     <?= $lazyLoading ?>
-                                     onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'100\'><rect width=\'80\' height=\'100\' fill=\'%23f1f5f9\'/><text x=\'50%%27 y=\'50%%27 dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'10\' fill=\'%2394a3b8\'>RESİM YOK</text></svg>'">
-                                
-                                <!-- Dynamic countdown badge -->
-                                <div class="absolute top-4 left-4 z-10">
-                                    <?= brochure_status_badge_html($selected_tab, $b['start_date'], $b['end_date'], $today) ?>
-                                </div>
-                                
-                                <!-- AI analysis badge (top right, only if analyzed) -->
-                                <?php if (brochure_has_ai_analysis($b)): ?>
-                                    <div class="absolute z-10" style="top: 1rem; right: 1rem;">
-                                        <span class="text-white flex items-center justify-center material-symbols-outlined"
-                                              style="width: 2.5rem; height: 2.5rem; background: #6d28d9; border-radius: 1rem; border: 2px solid #fff; box-shadow: 0 16px 35px rgba(76, 29, 149, .32); font-size: 22px;"
-                                              title="Yapay zeka ürün analizi yapıldı">smart_toy</span>
-                                    </div>
-                                <?php endif; ?>
-
-                                <!-- Market logo overlay in bottom left corner -->
-                                <div class="absolute bottom-3 left-3 bg-white border border-slate-100 rounded-xl p-1.5 shadow-md flex items-center justify-center w-11 h-11">
-                                    <?php if ($b['market_logo']): ?>
-                                        <img src="uploads/markets/<?= htmlspecialchars($b['market_logo']) ?>" class="w-full h-full object-contain rounded" alt="" width="44" height="44">
-                                    <?php else: ?>
-                                        <div class="text-[10px] font-bold text-slate-400">LOG</div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            
-                            <!-- Details -->
-                            <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
-                                <div>
-                                    <span class="text-xs font-bold text-red-600 tracking-wider uppercase mb-1.5 block"><?= htmlspecialchars($b['market_name']) ?></span>
-                                    <h3 class="font-title text-base font-bold text-slate-800 line-clamp-2 hover:text-red-600 transition-colors" title="<?= htmlspecialchars($b['title']) ?>">
-                                        <?= htmlspecialchars($b['title']) ?>
-                                    </h3>
-                                </div>
-                                
-                                <div class="flex justify-between items-center border-t border-slate-100 pt-4 text-xs">
-                                    <span class="text-slate-600 font-semibold flex items-center gap-1">
-                                        <span class="material-symbols-outlined text-sm">date_range</span>
-                                        <?= date('d.m.Y', strtotime($b['start_date'])) ?> - <?= date('d.m.Y', strtotime($b['end_date'])) ?>
-                                    </span>
-                                    <span class="text-red-600 font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                                        İncele 
-                                        <span class="material-symbols-outlined text-sm">chevron_right</span>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                        <?php include __DIR__ . '/partials/brochure_card.php'; ?>
                     <?php 
                         $bIndex++;
                     endforeach; 

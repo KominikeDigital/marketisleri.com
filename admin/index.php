@@ -207,9 +207,15 @@ $recent_brochures = $recent_stmt->fetchAll();
                                 </thead>
                                 <tbody class="divide-y divide-slate-800 text-sm">
                                     <?php foreach ($recent_brochures as $b): ?>
+                                        <?php
+                                        $cover_src = mi_brochure_cover_src($b['cover_image'] ?? '');
+                                        if ($cover_src !== '' && !str_starts_with($cover_src, 'http') && !str_starts_with($cover_src, 'data:image')) {
+                                            $cover_src = '../' . $cover_src;
+                                        }
+                                        ?>
                                         <tr>
                                             <td class="py-4">
-                                                <img src="../uploads/brochures/<?= htmlspecialchars($b['cover_image']) ?>" 
+                                                <img src="<?= htmlspecialchars($cover_src) ?>"
                                                      class="w-10 h-14 object-cover rounded-lg border border-slate-800" 
                                                      alt="Cover" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'100\'><rect width=\'80\' height=\'100\' fill=\'%231e293b\'/><text x=\'50%%27 y=\'50%%27 dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'10\' fill=\'%2364748b\'>RESİM YOK</text></svg>'">
                                             </td>

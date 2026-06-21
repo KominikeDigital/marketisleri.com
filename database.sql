@@ -46,6 +46,29 @@ CREATE TABLE IF NOT EXISTS brochure_pages (
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS brochure_products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    brochure_id INT NOT NULL,
+    page_number INT NOT NULL DEFAULT 1,
+    product_name VARCHAR(500) NOT NULL,
+    price DECIMAL(10,2) DEFAULT NULL,
+    original_price DECIMAL(10,2) DEFAULT NULL,
+    unit VARCHAR(100) DEFAULT NULL,
+    product_url VARCHAR(1000) DEFAULT NULL,
+    product_image VARCHAR(500) DEFAULT NULL,
+    rating VARCHAR(20) DEFAULT NULL,
+    review_count VARCHAR(50) DEFAULT NULL,
+    description TEXT,
+    x_pct FLOAT DEFAULT NULL,
+    y_pct FLOAT DEFAULT NULL,
+    w_pct FLOAT DEFAULT NULL,
+    h_pct FLOAT DEFAULT NULL,
+    analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_products_brochure
+        FOREIGN KEY (brochure_id) REFERENCES brochures(id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS settings (
     key_name VARCHAR(100) PRIMARY KEY,
     value_text TEXT

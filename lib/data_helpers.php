@@ -256,3 +256,60 @@ if (!function_exists('mi_product_match_score')) {
         return max(0, min(100, (int)round($score)));
     }
 }
+
+if (!function_exists('mi_is_amazon_brochure')) {
+    function mi_is_amazon_brochure(array $brochure): bool {
+        return (($brochure['source_name'] ?? '') === 'amazon')
+            || (($brochure['market_slug'] ?? '') === 'amazon');
+    }
+}
+
+if (!function_exists('mi_brochure_cover_src')) {
+    function mi_brochure_cover_src(?string $cover_image): string {
+        $cover_image = trim((string)$cover_image);
+        if ($cover_image === '') {
+            return '';
+        }
+
+        if (str_starts_with($cover_image, 'http://') || str_starts_with($cover_image, 'https://') || str_starts_with($cover_image, 'data:image')) {
+            return $cover_image;
+        }
+
+        $cover_image = ltrim($cover_image, '/');
+        if (str_starts_with($cover_image, 'uploads/brochures/')) {
+            return $cover_image;
+        }
+
+        return 'uploads/brochures/' . $cover_image;
+    }
+}
+
+if (!function_exists('mi_price_label')) {
+    function mi_price_label($price): string {
+        if ($price === null || $price === '') {
+            return '';
+        }
+
+        $parsed = is_numeric($price) ? (float)$price : mi_parse_price($price);
+        if ($parsed === null) {
+            return '';
+        }
+
+        return number_format($parsed, 2, ',', '.') . ' TL';
+    }
+}
+
+if (!function_exists('mi_rating_label')) {
+    function mi_rating_label($rating): string {
+        if ($rating === null || $rating === '') {
+            return '';
+        }
+
+        $text = str_replace(',', '.', (string)$rating);
+        if (preg_match('/\d+(?:\.\d+)?/', $text, $m)) {
+            return number_format((float)$m[0], 1, ',', '.') . '/5';
+        }
+
+        return trim((string)$rating);
+    }
+}

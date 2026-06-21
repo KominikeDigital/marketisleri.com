@@ -231,6 +231,11 @@ function initialize_database($pdo, $driver) {
                 price DECIMAL(10,2) DEFAULT NULL,
                 original_price DECIMAL(10,2) DEFAULT NULL,
                 unit VARCHAR(100) DEFAULT NULL,
+                product_url VARCHAR(1000) DEFAULT NULL,
+                product_image VARCHAR(500) DEFAULT NULL,
+                rating VARCHAR(20) DEFAULT NULL,
+                review_count VARCHAR(50) DEFAULT NULL,
+                description TEXT,
                 x_pct FLOAT DEFAULT NULL,
                 y_pct FLOAT DEFAULT NULL,
                 w_pct FLOAT DEFAULT NULL,
@@ -323,6 +328,11 @@ function initialize_database($pdo, $driver) {
                 price REAL DEFAULT NULL,
                 original_price REAL DEFAULT NULL,
                 unit TEXT DEFAULT NULL,
+                product_url TEXT DEFAULT NULL,
+                product_image TEXT DEFAULT NULL,
+                rating TEXT DEFAULT NULL,
+                review_count TEXT DEFAULT NULL,
+                description TEXT,
                 x_pct REAL DEFAULT NULL,
                 y_pct REAL DEFAULT NULL,
                 w_pct REAL DEFAULT NULL,
@@ -530,6 +540,26 @@ foreach ($brochure_source_columns as $col => $type) {
     } catch (PDOException $e) {
         try {
             $pdo->exec("ALTER TABLE brochures ADD COLUMN $col $type");
+        } catch (PDOException $ex) {
+            // Fail silently
+        }
+    }
+}
+
+// Database migrations for product cards and affiliate product metadata.
+$brochure_product_columns = [
+    'product_url' => 'VARCHAR(1000) DEFAULT NULL',
+    'product_image' => 'VARCHAR(500) DEFAULT NULL',
+    'rating' => 'VARCHAR(20) DEFAULT NULL',
+    'review_count' => 'VARCHAR(50) DEFAULT NULL',
+    'description' => 'TEXT',
+];
+foreach ($brochure_product_columns as $col => $type) {
+    try {
+        $pdo->query("SELECT $col FROM brochure_products LIMIT 1");
+    } catch (PDOException $e) {
+        try {
+            $pdo->exec("ALTER TABLE brochure_products ADD COLUMN $col $type");
         } catch (PDOException $ex) {
             // Fail silently
         }
