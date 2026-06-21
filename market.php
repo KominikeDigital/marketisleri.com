@@ -34,7 +34,7 @@ $conditions = [
     "b.market_id = ?",
     "b.show_on_homepage = 1",
     "((b.cover_image IS NOT NULL AND b.cover_image != '') OR (b.pdf_path IS NOT NULL AND b.pdf_path != '') OR (SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = b.id) > 0)",
-    "(COALESCE(b.source_name, '') <> 'amazon'
+    "(COALESCE(b.source_name, '') NOT IN ('amazon', 'hepsiburada')
         OR COALESCE(b.source_url, '') <> ''
         OR EXISTS (
             SELECT 1 FROM brochure_products bp_link
@@ -70,12 +70,14 @@ if (!empty($search_query)) {
 }
 
 $sql = "SELECT b.*, m.name as market_name, m.logo as market_logo, m.slug as market_slug,
-               ap.product_name AS amazon_product_name,
-               ap.price AS amazon_product_price,
-               ap.product_url AS amazon_product_url,
-               ap.rating AS amazon_product_rating,
-               ap.review_count AS amazon_review_count,
-               ap.description AS amazon_product_description,
+               ap.product_name AS affiliate_product_name,
+               ap.price AS affiliate_product_price,
+               ap.product_url AS affiliate_product_url,
+               ap.product_image AS affiliate_product_image,
+               ap.product_images AS affiliate_product_images,
+               ap.rating AS affiliate_product_rating,
+               ap.review_count AS affiliate_review_count,
+               ap.description AS affiliate_product_description,
                CASE WHEN EXISTS (SELECT 1 FROM brochure_products bp WHERE bp.brochure_id = b.id) THEN 1 ELSE 0 END as has_ai_analysis
         FROM brochures b 
         JOIN markets m ON b.market_id = m.id

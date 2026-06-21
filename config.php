@@ -233,6 +233,7 @@ function initialize_database($pdo, $driver) {
                 unit VARCHAR(100) DEFAULT NULL,
                 product_url VARCHAR(1000) DEFAULT NULL,
                 product_image VARCHAR(500) DEFAULT NULL,
+                product_images TEXT,
                 rating VARCHAR(20) DEFAULT NULL,
                 review_count VARCHAR(50) DEFAULT NULL,
                 description TEXT,
@@ -330,6 +331,7 @@ function initialize_database($pdo, $driver) {
                 unit TEXT DEFAULT NULL,
                 product_url TEXT DEFAULT NULL,
                 product_image TEXT DEFAULT NULL,
+                product_images TEXT,
                 rating TEXT DEFAULT NULL,
                 review_count TEXT DEFAULT NULL,
                 description TEXT,
@@ -550,6 +552,7 @@ foreach ($brochure_source_columns as $col => $type) {
 $brochure_product_columns = [
     'product_url' => 'VARCHAR(1000) DEFAULT NULL',
     'product_image' => 'VARCHAR(500) DEFAULT NULL',
+    'product_images' => 'TEXT',
     'rating' => 'VARCHAR(20) DEFAULT NULL',
     'review_count' => 'VARCHAR(50) DEFAULT NULL',
     'description' => 'TEXT',

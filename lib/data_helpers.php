@@ -264,6 +264,29 @@ if (!function_exists('mi_is_amazon_brochure')) {
     }
 }
 
+if (!function_exists('mi_is_affiliate_brochure')) {
+    function mi_is_affiliate_brochure(array $brochure): bool {
+        $source = (string)($brochure['source_name'] ?? '');
+        $slug = (string)($brochure['market_slug'] ?? '');
+        return in_array($source, ['amazon', 'hepsiburada'], true)
+            || in_array($slug, ['amazon', 'hepsiburada'], true);
+    }
+}
+
+if (!function_exists('mi_affiliate_source_label')) {
+    function mi_affiliate_source_label(array $brochure): string {
+        $source = (string)($brochure['source_name'] ?? '');
+        $slug = (string)($brochure['market_slug'] ?? '');
+        if ($source === 'hepsiburada' || $slug === 'hepsiburada') {
+            return 'Hepsiburada';
+        }
+        if ($source === 'amazon' || $slug === 'amazon') {
+            return 'Amazon';
+        }
+        return (string)($brochure['market_name'] ?? 'Fırsat');
+    }
+}
+
 if (!function_exists('mi_brochure_cover_src')) {
     function mi_brochure_cover_src(?string $cover_image): string {
         $cover_image = trim((string)$cover_image);
@@ -281,6 +304,35 @@ if (!function_exists('mi_brochure_cover_src')) {
         }
 
         return 'uploads/brochures/' . $cover_image;
+    }
+}
+
+if (!function_exists('mi_affiliate_image_list')) {
+    function mi_affiliate_image_list(array $brochure): array {
+        $images = [];
+        $raw = trim((string)($brochure['affiliate_product_images'] ?? ''));
+        if ($raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $img) {
+                    if (is_string($img) && trim($img) !== '') {
+                        $images[] = mi_brochure_cover_src($img);
+                    }
+                }
+            }
+        }
+
+        $single = trim((string)($brochure['affiliate_product_image'] ?? ''));
+        if ($single !== '') {
+            $images[] = mi_brochure_cover_src($single);
+        }
+
+        $cover = mi_brochure_cover_src($brochure['cover_image'] ?? '');
+        if ($cover !== '') {
+            $images[] = $cover;
+        }
+
+        return array_values(array_unique(array_filter($images)));
     }
 }
 

@@ -9,30 +9,31 @@ if (!isset($_SESSION['admin']) || $_SESSION['admin'] !== true) {
 $error = null;
 $success = null;
 
-function amazon_ensure_market(PDO $pdo): array {
-    $stmt = $pdo->query("SELECT * FROM markets WHERE slug = 'amazon' LIMIT 1");
+function hepsiburada_ensure_market(PDO $pdo): array {
+    $stmt = $pdo->query("SELECT * FROM markets WHERE slug = 'hepsiburada' LIMIT 1");
     $market = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($market) {
         return $market;
     }
 
     $pdo->exec("INSERT INTO markets (name, slug, logo, description, category_id, is_popular, scraper_active)
-                VALUES ('Amazon', 'amazon', 'amazon.png', 'Amazon affiliate ürün fırsatları ve kampanyaları.', 3, 1, 0)");
-    $stmt = $pdo->query("SELECT * FROM markets WHERE slug = 'amazon' LIMIT 1");
+                VALUES ('Hepsiburada', 'hepsiburada', NULL, 'Hepsiburada affiliate ürün fırsatları ve kampanyaları.', 3, 1, 0)");
+    $stmt = $pdo->query("SELECT * FROM markets WHERE slug = 'hepsiburada' LIMIT 1");
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-function amazon_fetch(string $url): array {
+function hepsiburada_curl(string $url, string $user_agent, bool $follow = true): array {
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HEADER => true,
+        CURLOPT_FOLLOWLOCATION => $follow,
         CURLOPT_MAXREDIRS => 8,
         CURLOPT_TIMEOUT => 30,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_ENCODING => '',
         CURLOPT_HTTPHEADER => [
-            'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+            'User-Agent: ' . $user_agent,
             'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language: tr-TR,tr;q=0.9,en-US;q=0.7,en;q=0.6',
             'Cache-Control: no-cache',
@@ -40,48 +41,137 @@ function amazon_fetch(string $url): array {
         ],
     ]);
 
-    $html = curl_exec($ch);
+    $raw = curl_exec($ch);
     $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $header_size = (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE);
     $final_url = (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
     $err = curl_error($ch);
 
+    $headers = is_string($raw) ? substr($raw, 0, $header_size) : '';
+    $html = is_string($raw) ? substr($raw, $header_size) : '';
+
     return [
         'html' => ($code >= 200 && $code < 400 && is_string($html)) ? $html : '',
+        'headers' => $headers,
         'code' => $code,
         'final_url' => $final_url ?: $url,
         'error' => $err,
     ];
 }
 
-function amazon_extract_asin(string $url): string {
-    $decoded = urldecode($url);
-    $patterns = [
-        '~/(?:dp|gp/product|product)/([A-Z0-9]{10})(?:[/?#]|$)~i',
-        '~/(B[A-Z0-9]{9})(?:[/?#]|$)~i',
-        '~[?&]asin=([A-Z0-9]{10})~i',
-    ];
+function hepsiburada_abs_url(string $url, string $base): string {
+    $url = trim(html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    $url = stripcslashes($url);
+    if ($url === '') return '';
+    if (str_starts_with($url, '//')) return 'https:' . $url;
+    if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) return $url;
+    $parts = parse_url($base);
+    $origin = ($parts['scheme'] ?? 'https') . '://' . ($parts['host'] ?? 'www.hepsiburada.com');
+    if (str_starts_with($url, '/')) return $origin . $url;
+    return rtrim($origin, '/') . '/' . ltrim($url, '/');
+}
 
-    foreach ($patterns as $pattern) {
-        if (preg_match($pattern, $decoded, $m)) {
-            return strtoupper($m[1]);
-        }
+function hepsiburada_query_value(string $url, string $key): string {
+    $query = parse_url($url, PHP_URL_QUERY) ?: '';
+    if ($query === '') return '';
+    parse_str($query, $params);
+    return isset($params[$key]) && is_scalar($params[$key]) ? trim((string)$params[$key]) : '';
+}
+
+function hepsiburada_header_location(string $headers): string {
+    if (preg_match_all('/^Location:\s*(.+)$/mi', $headers, $matches)) {
+        return trim((string)end($matches[1]));
+    }
+    return '';
+}
+
+function hepsiburada_extract_fallback_url(string $value): string {
+    $fallback = hepsiburada_query_value($value, 'adj_fallback');
+    if ($fallback !== '') {
+        return html_entity_decode($fallback, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+
+    if (preg_match('/adj_fallback=([^"&\s]+)/i', $value, $m)) {
+        return html_entity_decode(urldecode($m[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     return '';
 }
 
-function amazon_abs_url(string $url, string $base): string {
-    $url = trim(html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-    if ($url === '') return '';
-    if (str_starts_with($url, '//')) return 'https:' . $url;
-    if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) return $url;
-    $parts = parse_url($base);
-    $origin = ($parts['scheme'] ?? 'https') . '://' . ($parts['host'] ?? 'www.amazon.com.tr');
-    if (str_starts_with($url, '/')) return $origin . $url;
-    return rtrim($origin, '/') . '/' . ltrim($url, '/');
+function hepsiburada_probe_fallback_url(string $url): string {
+    $mobile_ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+    $current = $url;
+
+    for ($i = 0; $i < 5; $i++) {
+        $fallback = hepsiburada_extract_fallback_url($current);
+        if ($fallback !== '') return $fallback;
+
+        $fetch = hepsiburada_curl($current, $mobile_ua, false);
+        $fallback = hepsiburada_extract_fallback_url($fetch['final_url'] . "\n" . $fetch['headers'] . "\n" . $fetch['html']);
+        if ($fallback !== '') return $fallback;
+
+        $location = hepsiburada_header_location($fetch['headers']);
+        if ($location === '') break;
+        if (!str_starts_with($location, 'http://') && !str_starts_with($location, 'https://')) break;
+        $current = hepsiburada_abs_url($location, $current);
+    }
+
+    return '';
 }
 
-function amazon_meta(DOMXPath $xp, string $name): string {
+function hepsiburada_fetch(string $url): array {
+    $desktop_ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+    $primary = hepsiburada_curl($url, $desktop_ua, true);
+    $fallback_url = hepsiburada_extract_fallback_url($primary['final_url']) ?: hepsiburada_probe_fallback_url($url);
+    $product_url = $fallback_url ?: $primary['final_url'];
+
+    if ($primary['html'] !== '' && !hepsiburada_is_blocked_html($primary['html'])) {
+        $primary['product_url'] = $product_url;
+        return $primary;
+    }
+
+    if ($fallback_url !== '') {
+        $fallback = hepsiburada_curl($fallback_url, $desktop_ua, true);
+        $fallback['product_url'] = $fallback_url;
+        $fallback['fallback_url'] = $fallback_url;
+        return $fallback;
+    }
+
+    $primary['product_url'] = $product_url;
+    return $primary;
+}
+
+function hepsiburada_is_blocked_html(string $html): bool {
+    return stripos($html, 'Access Denied') !== false
+        || stripos($html, 'akamai') !== false
+        || stripos($html, 'Forbidden') !== false;
+}
+
+function hepsiburada_extract_sku(string $url, string $html = ''): string {
+    $source = urldecode($url . "\n" . $html);
+    $patterns = [
+        '~(?:-p-|[?&]sku=)(HBCV[0-9A-Z]+|[A-Z0-9]{8,})(?:[/?#&]|$)~i',
+        '~["\']sku["\']\s*:\s*["\']([^"\']{6,})["\']~i',
+        '~["\']productId["\']\s*:\s*["\']?([^,"\'}\s]{6,})~i',
+    ];
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $source, $m)) {
+            return strtoupper(trim($m[1]));
+        }
+    }
+    return '';
+}
+
+function hepsiburada_title_from_url(string $url): string {
+    $path = trim((string)(parse_url($url, PHP_URL_PATH) ?: ''), '/');
+    $last = urldecode(basename($path));
+    $last = preg_replace('~-p-[A-Z0-9]+$~i', '', $last) ?? $last;
+    $last = preg_replace('/[-_]+/u', ' ', $last) ?? $last;
+    $last = preg_replace('/\s+/', ' ', $last) ?? $last;
+    return trim(mb_convert_case($last, MB_CASE_TITLE, 'UTF-8'));
+}
+
+function hepsiburada_meta(DOMXPath $xp, string $name): string {
     $queries = [
         '//meta[@property="' . $name . '"]/@content',
         '//meta[@name="' . $name . '"]/@content',
@@ -95,7 +185,7 @@ function amazon_meta(DOMXPath $xp, string $name): string {
     return '';
 }
 
-function amazon_first_text(DOMXPath $xp, array $queries): string {
+function hepsiburada_first_text(DOMXPath $xp, array $queries): string {
     foreach ($queries as $query) {
         $node = $xp->query($query)->item(0);
         if ($node && trim($node->textContent) !== '') {
@@ -105,103 +195,7 @@ function amazon_first_text(DOMXPath $xp, array $queries): string {
     return '';
 }
 
-function amazon_first_attr(DOMXPath $xp, array $queries, string $attr): string {
-    foreach ($queries as $query) {
-        $node = $xp->query($query)->item(0);
-        if ($node instanceof DOMElement) {
-            $value = trim($node->getAttribute($attr));
-            if ($value !== '') return $value;
-        }
-    }
-    return '';
-}
-
-function amazon_dynamic_image(DOMXPath $xp): string {
-    $img = $xp->query('//*[@id="landingImage"] | //img[@data-a-dynamic-image]')->item(0);
-    if (!$img instanceof DOMElement) return '';
-
-    $dynamic = $img->getAttribute('data-a-dynamic-image');
-    if ($dynamic !== '') {
-        $decoded = json_decode(html_entity_decode($dynamic, ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
-        if (is_array($decoded) && $decoded) {
-            return (string)array_key_first($decoded);
-        }
-    }
-
-    foreach (['data-old-hires', 'src'] as $attr) {
-        $value = trim($img->getAttribute($attr));
-        if ($value !== '' && !str_contains($value, 'transparent-pixel')) {
-            return $value;
-        }
-    }
-
-    return '';
-}
-
-function amazon_add_image_url(array &$images, string $url, string $base): void {
-    $url = amazon_abs_url($url, $base);
-    if ($url === '' || str_contains($url, 'transparent-pixel')) {
-        return;
-    }
-    $images[] = $url;
-}
-
-function amazon_jsonld_images(array $products, string $base): array {
-    $images = [];
-    foreach ($products as $product) {
-        $value = $product['image'] ?? null;
-        if (!$value) continue;
-
-        $stack = is_array($value) ? $value : [$value];
-        while ($stack) {
-            $item = array_shift($stack);
-            if (is_string($item) || is_numeric($item)) {
-                amazon_add_image_url($images, (string)$item, $base);
-            } elseif (is_array($item)) {
-                foreach (['url', 'contentUrl', '@id'] as $field) {
-                    if (!empty($item[$field]) && (is_string($item[$field]) || is_numeric($item[$field]))) {
-                        amazon_add_image_url($images, (string)$item[$field], $base);
-                    }
-                }
-                foreach ($item as $child) {
-                    if (is_array($child)) {
-                        $stack[] = $child;
-                    }
-                }
-            }
-        }
-    }
-    return array_values(array_unique($images));
-}
-
-function amazon_dynamic_images(DOMXPath $xp, string $base): array {
-    $images = [];
-    foreach ($xp->query('//*[@id="landingImage"] | //img[@data-a-dynamic-image] | //img[contains(@src, "media-amazon")]') as $img) {
-        if (!$img instanceof DOMElement) continue;
-
-        $dynamic = $img->getAttribute('data-a-dynamic-image');
-        if ($dynamic !== '') {
-            $decoded = json_decode(html_entity_decode($dynamic, ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
-            if (is_array($decoded)) {
-                foreach (array_keys($decoded) as $url) {
-                    amazon_add_image_url($images, (string)$url, $base);
-                }
-            }
-        }
-
-        foreach (['data-old-hires', 'data-src', 'src'] as $attr) {
-            $value = trim($img->getAttribute($attr));
-            if ($value !== '') {
-                amazon_add_image_url($images, $value, $base);
-            }
-        }
-
-        if (count($images) >= 8) break;
-    }
-    return array_values(array_unique($images));
-}
-
-function amazon_jsonld_products(DOMXPath $xp): array {
+function hepsiburada_jsonld_products(DOMXPath $xp): array {
     $products = [];
     foreach ($xp->query('//script[@type="application/ld+json"]') as $script) {
         $raw = trim($script->textContent);
@@ -232,12 +226,15 @@ function amazon_jsonld_products(DOMXPath $xp): array {
     return $products;
 }
 
-function amazon_jsonld_value(array $products, string $field): string {
+function hepsiburada_jsonld_value(array $products, string $field): string {
     foreach ($products as $product) {
         if (!empty($product[$field])) {
             $value = $product[$field];
             if (is_array($value)) {
                 $value = reset($value);
+                if (is_array($value)) {
+                    $value = $value['url'] ?? $value['contentUrl'] ?? '';
+                }
             }
             if (is_string($value) || is_numeric($value)) {
                 return trim((string)$value);
@@ -247,7 +244,7 @@ function amazon_jsonld_value(array $products, string $field): string {
     return '';
 }
 
-function amazon_jsonld_offer_price(array $products): ?float {
+function hepsiburada_jsonld_offer_price(array $products): ?float {
     foreach ($products as $product) {
         $offers = $product['offers'] ?? null;
         if (!$offers) continue;
@@ -265,7 +262,7 @@ function amazon_jsonld_offer_price(array $products): ?float {
     return null;
 }
 
-function amazon_jsonld_rating(array $products): array {
+function hepsiburada_jsonld_rating(array $products): array {
     foreach ($products as $product) {
         $rating = $product['aggregateRating'] ?? null;
         if (is_array($rating)) {
@@ -278,89 +275,123 @@ function amazon_jsonld_rating(array $products): array {
     return ['rating' => '', 'review_count' => ''];
 }
 
-function amazon_bullet_summary(DOMXPath $xp): string {
-    $parts = [];
-    foreach ($xp->query('//*[@id="feature-bullets"]//li//span[normalize-space()]') as $node) {
-        $text = trim(preg_replace('/\s+/', ' ', $node->textContent));
-        if ($text !== '' && !str_contains($text, 'Daha fazla bilgi')) {
-            $parts[] = $text;
+function hepsiburada_collect_images($value, string $base, array &$images): void {
+    if (is_string($value) || is_numeric($value)) {
+        $url = hepsiburada_abs_url((string)$value, $base);
+        if ($url !== '' && str_contains($url, 'productimages.hepsiburada.net')) {
+            $images[] = $url;
         }
-        if (count($parts) >= 2) break;
+        return;
     }
-    return implode(' ', $parts);
+
+    if (!is_array($value)) return;
+    foreach (['url', 'contentUrl', 'imageUrl', 'src'] as $field) {
+        if (!empty($value[$field])) {
+            hepsiburada_collect_images($value[$field], $base, $images);
+        }
+    }
+    foreach ($value as $child) {
+        if (is_array($child)) {
+            hepsiburada_collect_images($child, $base, $images);
+        }
+    }
 }
 
-function amazon_parse_product(string $html, string $requested_url, string $final_url): array {
-    if (stripos($html, 'Robot Check') !== false || stripos($html, 'captcha') !== false) {
-        throw new RuntimeException('Amazon bot/CAPTCHA koruması döndürdü. Linke tarayıcıdan erişilebildiğini kontrol edip tekrar deneyin.');
+function hepsiburada_jsonld_images(array $products, string $base): array {
+    $images = [];
+    foreach ($products as $product) {
+        if (!empty($product['image'])) {
+            hepsiburada_collect_images($product['image'], $base, $images);
+        }
+    }
+    return array_values(array_unique($images));
+}
+
+function hepsiburada_html_images(DOMXPath $xp, string $html, string $base): array {
+    $images = [];
+    foreach ($xp->query('//img[@src or @data-src]') as $img) {
+        if (!$img instanceof DOMElement) continue;
+        foreach (['data-src', 'src'] as $attr) {
+            $value = trim($img->getAttribute($attr));
+            if ($value !== '') {
+                hepsiburada_collect_images($value, $base, $images);
+            }
+        }
+    }
+
+    if (preg_match_all('~https?:\\\\?/\\\\?/productimages\.hepsiburada\.net[^"\')\s\\\\]+~i', $html, $matches)) {
+        foreach ($matches[0] as $url) {
+            hepsiburada_collect_images(str_replace('\/', '/', $url), $base, $images);
+        }
+    }
+
+    return array_values(array_unique($images));
+}
+
+function hepsiburada_parse_product(string $html, string $requested_url, string $final_url): array {
+    if ($html === '' || hepsiburada_is_blocked_html($html)) {
+        throw new RuntimeException('Hepsiburada ürün sayfası erişim koruması döndürdü. Link yönlendirmesi okunabiliyor ancak ürün adı/fiyat/görsel için sayfa HTML’i alınamadı.');
     }
 
     libxml_use_internal_errors(true);
     $doc = new DOMDocument();
     $doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
     $xp = new DOMXPath($doc);
-    $json_products = amazon_jsonld_products($xp);
+    $json_products = hepsiburada_jsonld_products($xp);
 
-    $title = amazon_first_text($xp, [
-        '//*[@id="productTitle"]',
-        '//span[contains(@class, "product-title-word-break")]',
+    $title = hepsiburada_first_text($xp, [
+        '//h1[@data-test-id="title"]',
+        '//h1[contains(@class, "product-name")]',
         '//h1',
     ]);
     if ($title === '') {
-        $title = amazon_jsonld_value($json_products, 'name') ?: amazon_meta($xp, 'og:title') ?: amazon_meta($xp, 'twitter:title');
+        $title = hepsiburada_jsonld_value($json_products, 'name')
+            ?: hepsiburada_meta($xp, 'og:title')
+            ?: hepsiburada_meta($xp, 'twitter:title')
+            ?: hepsiburada_title_from_url($final_url);
     }
-    $title = trim(preg_replace('/\s*\|\s*Amazon.*$/iu', '', $title));
+    $title = trim(preg_replace('/\s*\|\s*Hepsiburada.*$/iu', '', $title));
 
-    $price = amazon_jsonld_offer_price($json_products);
+    $price = hepsiburada_jsonld_offer_price($json_products);
     if ($price === null) {
-        $price_text = amazon_meta($xp, 'product:price:amount') ?: amazon_first_text($xp, [
-            '//*[@id="corePrice_feature_div"]//*[contains(@class, "a-offscreen")]',
-            '//*[@id="priceblock_ourprice"]',
-            '//*[@id="priceblock_dealprice"]',
-            '//*[contains(@class, "a-price")]//*[contains(@class, "a-offscreen")]',
+        $price_text = hepsiburada_meta($xp, 'product:price:amount') ?: hepsiburada_first_text($xp, [
+            '//*[@data-test-id="price-current-price"]',
+            '//*[contains(@class, "current-price")]',
+            '//*[contains(@class, "price")]',
         ]);
         $price = mi_parse_price($price_text);
     }
 
     $image_urls = array_values(array_unique(array_filter(array_merge(
-        amazon_jsonld_images($json_products, $final_url),
-        [amazon_meta($xp, 'og:image')],
-        amazon_dynamic_images($xp, $final_url),
-        [amazon_dynamic_image($xp)]
+        hepsiburada_jsonld_images($json_products, $final_url),
+        [hepsiburada_meta($xp, 'og:image')],
+        hepsiburada_html_images($xp, $html, $final_url)
     ))));
-    $image_urls = array_map(fn($url) => amazon_abs_url((string)$url, $final_url), $image_urls);
+    $image_urls = array_map(fn($url) => hepsiburada_abs_url((string)$url, $final_url), $image_urls);
     $image_urls = array_values(array_unique(array_filter($image_urls)));
     $image = $image_urls[0] ?? '';
 
-    $rating_data = amazon_jsonld_rating($json_products);
+    $rating_data = hepsiburada_jsonld_rating($json_products);
     $rating = $rating_data['rating'];
-    if ($rating === '') {
-        $rating_text = amazon_first_attr($xp, ['//*[@id="acrPopover"]'], 'title')
-            ?: amazon_first_text($xp, ['//*[contains(@class, "a-icon-alt")]']);
-        if (preg_match('/(\d+(?:[.,]\d+)?)/u', $rating_text, $m)) {
-            $rating = str_replace(',', '.', $m[1]);
-        }
+    if ($rating === '' && preg_match('/"ratingValue"\s*:\s*"?(\d+(?:[.,]\d+)?)"?/i', $html, $m)) {
+        $rating = str_replace(',', '.', $m[1]);
     }
 
     $review_count = $rating_data['review_count'];
-    if ($review_count === '') {
-        $review_count = amazon_first_text($xp, ['//*[@id="acrCustomerReviewText"]']);
-        $review_count = trim(preg_replace('/[^0-9.]+/', '', $review_count));
+    if ($review_count === '' && preg_match('/"reviewCount"\s*:\s*"?([0-9.]+)"?/i', $html, $m)) {
+        $review_count = $m[1];
     }
 
-    $description = amazon_bullet_summary($xp);
-    if ($description === '') {
-        $description = amazon_jsonld_value($json_products, 'description') ?: amazon_meta($xp, 'description');
-    }
+    $description = hepsiburada_jsonld_value($json_products, 'description') ?: hepsiburada_meta($xp, 'description');
     $description = mb_substr(trim(preg_replace('/\s+/', ' ', $description)), 0, 280, 'UTF-8');
 
-    $asin = amazon_extract_asin($final_url) ?: amazon_extract_asin($requested_url);
+    $sku = hepsiburada_extract_sku($final_url, $html) ?: hepsiburada_extract_sku($requested_url, $html);
     if ($title === '' || $image === '') {
-        throw new RuntimeException('Ürün adı veya görseli okunamadı. Amazon sayfası bot koruması, geçersiz link veya desteklenmeyen sayfa yapısı döndürmüş olabilir.');
+        throw new RuntimeException('Ürün adı veya görseli okunamadı. Hepsiburada sayfası bot koruması, geçersiz link veya desteklenmeyen sayfa yapısı döndürmüş olabilir.');
     }
 
     return [
-        'asin' => $asin,
+        'sku' => $sku,
         'title' => $title,
         'price' => $price,
         'image_url' => $image,
@@ -373,7 +404,7 @@ function amazon_parse_product(string $html, string $requested_url, string $final
     ];
 }
 
-function amazon_download_image(string $url, string $source_key): ?string {
+function hepsiburada_download_image(string $url, string $source_key): ?string {
     $safe_key = preg_replace('/[^a-z0-9]+/i', '-', strtolower($source_key)) ?: md5($url);
     $path = parse_url($url, PHP_URL_PATH) ?: '';
     $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
@@ -381,7 +412,7 @@ function amazon_download_image(string $url, string $source_key): ?string {
         $ext = 'jpg';
     }
 
-    $file_name = 'amazon-' . $safe_key . '-' . substr(md5($url), 0, 8) . '-' . time() . '.' . $ext;
+    $file_name = 'hepsiburada-' . $safe_key . '-' . substr(md5($url), 0, 8) . '-' . time() . '.' . $ext;
     $dest = dirname(__DIR__) . '/uploads/brochures/' . $file_name;
     if (!is_dir(dirname($dest))) {
         mkdir(dirname($dest), 0755, true);
@@ -398,9 +429,9 @@ function amazon_download_image(string $url, string $source_key): ?string {
         CURLOPT_TIMEOUT => 30,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_HTTPHEADER => [
-            'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-            'Referer: https://www.amazon.com.tr/',
+            'Referer: https://www.hepsiburada.com/',
         ],
     ]);
     $ok = curl_exec($ch);
@@ -415,14 +446,14 @@ function amazon_download_image(string $url, string $source_key): ?string {
     return $file_name;
 }
 
-function amazon_source_uid(array $product): string {
-    if (!empty($product['asin'])) {
-        return 'amazon:' . $product['asin'];
+function hepsiburada_source_uid(array $product): string {
+    if (!empty($product['sku'])) {
+        return 'hepsiburada:' . $product['sku'];
     }
-    return 'amazon:' . md5(($product['final_url'] ?? '') . '|' . ($product['affiliate_url'] ?? ''));
+    return 'hepsiburada:' . md5(($product['final_url'] ?? '') . '|' . ($product['affiliate_url'] ?? ''));
 }
 
-$amazon_market = amazon_ensure_market($pdo);
+$hepsiburada_market = hepsiburada_ensure_market($pdo);
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
     $affiliate_url = trim((string)($_POST['affiliate_url'] ?? ''));
@@ -431,19 +462,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
     $show_on_homepage = isset($_POST['show_on_homepage']) ? 1 : 0;
 
     if ($affiliate_url === '' || !filter_var($affiliate_url, FILTER_VALIDATE_URL)) {
-        $error = 'Lütfen geçerli bir Amazon affiliate ürün linki girin.';
+        $error = 'Lütfen geçerli bir Hepsiburada affiliate ürün linki girin.';
     } else {
         try {
-            $fetch = amazon_fetch($affiliate_url);
-            if ($fetch['html'] === '') {
-                throw new RuntimeException('Amazon sayfası alınamadı. HTTP: ' . $fetch['code'] . ($fetch['error'] ? ' - ' . $fetch['error'] : ''));
+            $fetch = hepsiburada_fetch($affiliate_url);
+            $product_url = $fetch['product_url'] ?? $fetch['final_url'];
+            if ($fetch['html'] === '' || hepsiburada_is_blocked_html($fetch['html'])) {
+                $sku = hepsiburada_extract_sku($product_url) ?: hepsiburada_extract_sku($affiliate_url);
+                $details = $sku !== '' ? ' SKU: ' . $sku . '.' : '';
+                throw new RuntimeException('Hepsiburada ürün sayfası alınamadı. HTTP: ' . $fetch['code'] . '.' . $details . ' Kaynak erişim koruması döndürdüğü için ürün görseli/fiyatı güvenli okunamadı.');
             }
 
-            $product = amazon_parse_product($fetch['html'], $affiliate_url, $fetch['final_url']);
-            $source_uid = amazon_source_uid($product);
+            $product = hepsiburada_parse_product($fetch['html'], $affiliate_url, $product_url);
+            $source_uid = hepsiburada_source_uid($product);
+
             $stored_images = [];
             foreach (array_slice($product['image_urls'] ?: [$product['image_url']], 0, 5) as $image_url) {
-                $stored_images[] = amazon_download_image($image_url, $product['asin'] ?: md5($image_url)) ?: $image_url;
+                $stored_images[] = hepsiburada_download_image($image_url, $product['sku'] ?: md5($image_url)) ?: $image_url;
             }
             $stored_images = array_values(array_unique(array_filter($stored_images)));
             $cover_image = $stored_images[0] ?? $product['image_url'];
@@ -466,11 +501,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
                     UPDATE brochures
                     SET market_id = ?, title = ?, cover_image = ?, start_date = ?, end_date = ?,
                         show_on_homepage = ?, analyzed_at = CURRENT_TIMESTAMP,
-                        source_name = 'amazon', source_url = ?, source_uid = ?
+                        source_name = 'hepsiburada', source_url = ?, source_uid = ?
                     WHERE id = ?
                 ");
                 $stmt->execute([
-                    $amazon_market['id'],
+                    $hepsiburada_market['id'],
                     $product['title'],
                     $cover_image,
                     $start_date ?: date('Y-m-d'),
@@ -486,10 +521,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
                 $stmt = $pdo->prepare("
                     INSERT INTO brochures
                         (market_id, title, cover_image, start_date, end_date, show_on_homepage, analyzed_at, source_name, source_url, source_uid)
-                    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'amazon', ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'hepsiburada', ?, ?)
                 ");
                 $stmt->execute([
-                    $amazon_market['id'],
+                    $hepsiburada_market['id'],
                     $product['title'],
                     $cover_image,
                     $start_date ?: date('Y-m-d'),
@@ -521,8 +556,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
 
             $pdo->commit();
             $price_text = mi_price_label($product['price']) ?: 'Fiyat okunamadı';
-            $success = 'Amazon ürün kartı ' . $action . ': <strong>' . htmlspecialchars($product['title']) . '</strong> (' . htmlspecialchars($price_text) . '). '
-                . '<a href="../index.php?market=' . (int)$amazon_market['id'] . '" target="_blank" class="underline font-bold text-white ml-1">Sitede görüntüle</a>';
+            $success = 'Hepsiburada ürün kartı ' . $action . ': <strong>' . htmlspecialchars($product['title']) . '</strong> (' . htmlspecialchars($price_text) . '). '
+                . '<a href="../index.php?market=' . (int)$hepsiburada_market['id'] . '" target="_blank" class="underline font-bold text-white ml-1">Sitede görüntüle</a>';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -537,7 +572,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amazon Broşür Oluşturucu - marketisleri.com</title>
+    <title>Hepsiburada Broşür Oluşturucu - marketisleri.com</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
@@ -573,10 +608,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
             <a href="magic_import.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
                 <span class="material-symbols-outlined text-lg">auto_fix</span> Sihirli Broşür Ekle
             </a>
-            <a href="amazon_import.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold transition-all">
+            <a href="amazon_import.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
                 <span class="material-symbols-outlined text-lg">shopping_basket</span> Amazon Broşür Ekle
             </a>
-            <a href="hepsiburada_import.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+            <a href="hepsiburada_import.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold transition-all">
                 <span class="material-symbols-outlined text-lg">local_mall</span> Hepsiburada Broşür Ekle
             </a>
             <a href="cron_setup.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
@@ -608,7 +643,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
     <main class="flex-1 flex flex-col overflow-y-auto">
         <header class="h-20 bg-slate-900/40 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-8 shrink-0">
             <div>
-                <h1 class="font-title text-2xl font-bold text-white">Amazon Broşür Oluşturucu</h1>
+                <h1 class="font-title text-2xl font-bold text-white">Hepsiburada Broşür Oluşturucu</h1>
                 <p class="text-sm text-slate-400 mt-1">Affiliate ürün linkinden sitede görünen satın alma kartı oluşturur.</p>
             </div>
         </header>
@@ -630,20 +665,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
             <form method="POST" class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
                 <div class="border-b border-slate-800 pb-4">
                     <h2 class="font-title text-xl font-bold text-white flex items-center gap-2">
-                        <span class="material-symbols-outlined text-amber-500">shopping_basket</span>
+                        <span class="material-symbols-outlined text-amber-500">local_mall</span>
                         Affiliate Linkinden Ürün Kartı Oluştur
                     </h2>
                     <p class="text-sm text-slate-400 mt-2">
-                        Amazon ürün linkini ekleyin; sistem ürün adını, fiyatını, görselini, puanını ve kısa açıklamasını okuyup broşür listesinde satın alma butonlu kart olarak yayınlar.
+                        Hepsiburada affiliate linkini ekleyin; sistem ürün adını, fiyatını, görsellerini ve puanını okuyup broşür listesinde satın alma butonlu kart olarak yayınlar.
                     </p>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Amazon Affiliate Ürün Linki *</label>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Hepsiburada Affiliate Ürün Linki *</label>
                     <input type="url" name="affiliate_url" required value="<?= htmlspecialchars($_POST['affiliate_url'] ?? '') ?>"
                            class="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-4 py-3 outline-none transition text-sm"
-                           placeholder="https://www.amazon.com.tr/dp/... veya https://amzn.to/...">
-                    <p class="text-xs text-slate-500 mt-2">Aynı ürün tekrar eklenirse yeni kayıt açmak yerine mevcut Amazon kartı güncellenir.</p>
+                           placeholder="https://app.hb.biz/... veya https://www.hepsiburada.com/...">
+                    <p class="text-xs text-slate-500 mt-2">Aynı ürün tekrar eklenirse yeni kayıt açmak yerine mevcut Hepsiburada kartı güncellenir.</p>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -662,7 +697,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
                 <label class="inline-flex items-center gap-2 text-sm text-slate-300">
                     <input type="checkbox" name="show_on_homepage" value="1" checked
                            class="w-4 h-4 rounded bg-slate-950 border-slate-800 text-red-600 focus:ring-red-500 focus:ring-offset-slate-900">
-                    Anasayfada ve Amazon market sayfasında göster
+                    Anasayfada ve Hepsiburada market sayfasında göster
                 </label>
 
                 <div class="flex justify-end pt-4 border-t border-slate-800">

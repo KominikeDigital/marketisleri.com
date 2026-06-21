@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS brochure_products (
     unit VARCHAR(100) DEFAULT NULL,
     product_url VARCHAR(1000) DEFAULT NULL,
     product_image VARCHAR(500) DEFAULT NULL,
+    product_images TEXT,
     rating VARCHAR(20) DEFAULT NULL,
     review_count VARCHAR(50) DEFAULT NULL,
     description TEXT,
