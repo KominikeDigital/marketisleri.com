@@ -117,7 +117,7 @@ if (!empty($conditions)) {
 }
 
 // Brochure Pagination setup
-$limit = 10;
+$limit = 12;
 $page = isset($_GET['page']) && $_GET['page'] > 0 ? intval($_GET['page']) : 1;
 $offset = ($page - 1) * $limit;
 
@@ -379,7 +379,8 @@ if (!function_exists('formatBlogDate')) {
             </span>
 
             <h1 class="font-title text-4xl md:text-6xl font-black text-white mb-4 tracking-tight max-w-3xl mx-auto leading-tight">
-                Tüm Market Broşürleri <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-rose-400">Tek Yerde</span>
+                Tüm Market ve Mağaza Broşürleri <br>
+                <span class="italic text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-rose-400">Tek Yerde</span>
             </h1>
 
             <p class="text-slate-400 md:text-lg mb-10 max-w-xl mx-auto font-medium">
