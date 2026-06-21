@@ -146,6 +146,34 @@ function amazon_add_image_url(array &$images, string $url, string $base): void {
     $images[] = $url;
 }
 
+function amazon_is_product_image_url(string $url): bool {
+    $lower = strtolower($url);
+    if (!preg_match('~/(?:images|I)/I/~', str_replace('/images/I/', '/images/I/', $url))) {
+        return str_contains($lower, '/images/i/');
+    }
+
+    return !str_contains($lower, '/images/g/')
+        && !str_contains($lower, 'sprite')
+        && !str_contains($lower, 'logo')
+        && !str_contains($lower, 'transparent');
+}
+
+function amazon_product_image_score(string $url): int {
+    $score = 0;
+    if (preg_match('~_AC_SL(\d+)_~i', $url, $m)) $score += (int)min(80, round((int)$m[1] / 20));
+    if (preg_match('~_AC_SX(\d+)_~i', $url, $m)) $score += (int)min(60, round((int)$m[1] / 20));
+    if (preg_match('~_AC_SR(\d+),(\d+)_~i', $url)) $score -= 50;
+    if (preg_match('~/images/I/[^/?]+\\.jpe?g~i', $url)) $score += 10;
+    return $score;
+}
+
+function amazon_prioritize_product_images(array $images): array {
+    $filtered = array_values(array_filter($images, fn($url) => amazon_is_product_image_url((string)$url)));
+    $images = $filtered ?: $images;
+    usort($images, fn($a, $b) => amazon_product_image_score((string)$b) <=> amazon_product_image_score((string)$a));
+    return array_values(array_unique($images));
+}
+
 function amazon_jsonld_images(array $products, string $base): array {
     $images = [];
     foreach ($products as $product) {
@@ -291,10 +319,6 @@ function amazon_bullet_summary(DOMXPath $xp): string {
 }
 
 function amazon_parse_product(string $html, string $requested_url, string $final_url): array {
-    if (stripos($html, 'Robot Check') !== false || stripos($html, 'captcha') !== false) {
-        throw new RuntimeException('Amazon bot/CAPTCHA koruması döndürdü. Linke tarayıcıdan erişilebildiğini kontrol edip tekrar deneyin.');
-    }
-
     libxml_use_internal_errors(true);
     $doc = new DOMDocument();
     $doc->loadHTML('<?xml encoding="utf-8" ?>' . $html);
@@ -330,6 +354,7 @@ function amazon_parse_product(string $html, string $requested_url, string $final
     ))));
     $image_urls = array_map(fn($url) => amazon_abs_url((string)$url, $final_url), $image_urls);
     $image_urls = array_values(array_unique(array_filter($image_urls)));
+    $image_urls = amazon_prioritize_product_images($image_urls);
     $image = $image_urls[0] ?? '';
 
     $rating_data = amazon_jsonld_rating($json_products);
@@ -355,6 +380,9 @@ function amazon_parse_product(string $html, string $requested_url, string $final
     $description = mb_substr(trim(preg_replace('/\s+/', ' ', $description)), 0, 280, 'UTF-8');
 
     $asin = amazon_extract_asin($final_url) ?: amazon_extract_asin($requested_url);
+    if (($title === '' || $image === '') && (stripos($html, 'Robot Check') !== false || stripos($html, 'captcha') !== false)) {
+        throw new RuntimeException('Amazon ürün verisi bot/CAPTCHA koruması nedeniyle okunamadı. Link final URL’ye çözüldü ancak ürün adı/görseli alınamadı.');
+    }
     if ($title === '' || $image === '') {
         throw new RuntimeException('Ürün adı veya görseli okunamadı. Amazon sayfası bot koruması, geçersiz link veya desteklenmeyen sayfa yapısı döndürmüş olabilir.');
     }
@@ -442,7 +470,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
             $product = amazon_parse_product($fetch['html'], $affiliate_url, $fetch['final_url']);
             $source_uid = amazon_source_uid($product);
             $stored_images = [];
-            foreach (array_slice($product['image_urls'] ?: [$product['image_url']], 0, 5) as $image_url) {
+            $download_candidates = array_values(array_filter($product['image_urls'] ?: [$product['image_url']]));
+            foreach (array_slice($download_candidates, 0, 5) as $image_url) {
                 $stored_images[] = amazon_download_image($image_url, $product['asin'] ?: md5($image_url)) ?: $image_url;
             }
             $stored_images = array_values(array_unique(array_filter($stored_images)));

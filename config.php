@@ -190,6 +190,7 @@ function initialize_database($pdo, $driver) {
                 logo VARCHAR(255),
                 description TEXT,
                 category_id INT,
+                sort_order INT DEFAULT 0,
                 CONSTRAINT fk_markets_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
             "CREATE TABLE IF NOT EXISTS brochures (
@@ -288,6 +289,7 @@ function initialize_database($pdo, $driver) {
                 logo TEXT,
                 description TEXT,
                 category_id INTEGER,
+                sort_order INTEGER DEFAULT 0,
                 FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
             )",
             "CREATE TABLE IF NOT EXISTS brochures (
@@ -503,6 +505,17 @@ try {
     try {
         $pdo->exec("ALTER TABLE markets ADD COLUMN is_popular INT DEFAULT 0");
         $pdo->exec("UPDATE markets SET is_popular = 1 WHERE slug IN ('bim', 'a101', 'sok', 'teknosa')");
+    } catch (PDOException $ex) {
+        // Fail silently
+    }
+}
+
+// Database Migrations for Markets Sort Order feature
+try {
+    $pdo->query("SELECT sort_order FROM markets LIMIT 1");
+} catch (PDOException $e) {
+    try {
+        $pdo->exec("ALTER TABLE markets ADD COLUMN sort_order INT DEFAULT 0");
     } catch (PDOException $ex) {
         // Fail silently
     }

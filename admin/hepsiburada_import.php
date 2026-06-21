@@ -125,7 +125,7 @@ function hepsiburada_fetch(string $url): array {
     $fallback_url = hepsiburada_extract_fallback_url($primary['final_url']) ?: hepsiburada_probe_fallback_url($url);
     $product_url = $fallback_url ?: $primary['final_url'];
 
-    if ($primary['html'] !== '' && !hepsiburada_is_blocked_html($primary['html'])) {
+    if ($primary['html'] !== '' && !hepsiburada_is_blocked_html($primary['html']) && !hepsiburada_is_redirect_html($primary['html'])) {
         $primary['product_url'] = $product_url;
         return $primary;
     }
@@ -145,6 +145,12 @@ function hepsiburada_is_blocked_html(string $html): bool {
     return stripos($html, 'Access Denied') !== false
         || stripos($html, 'akamai') !== false
         || stripos($html, 'Forbidden') !== false;
+}
+
+function hepsiburada_is_redirect_html(string $html): bool {
+    return stripos($html, 'Proceed to the app store') !== false
+        || stripos($html, 'apps.apple.com/app/id481035064') !== false
+        || stripos($html, 'window.location.href') !== false && stripos($html, 'Download App') !== false;
 }
 
 function hepsiburada_extract_sku(string $url, string $html = ''): string {
@@ -169,6 +175,29 @@ function hepsiburada_title_from_url(string $url): string {
     $last = preg_replace('/[-_]+/u', ' ', $last) ?? $last;
     $last = preg_replace('/\s+/', ' ', $last) ?? $last;
     return trim(mb_convert_case($last, MB_CASE_TITLE, 'UTF-8'));
+}
+
+function hepsiburada_fallback_product(string $requested_url, string $final_url, string $html = ''): array {
+    $title = hepsiburada_title_from_url($final_url);
+    if ($title === '') {
+        $title = 'Hepsiburada Ürün Fırsatı';
+    }
+
+    $sku = hepsiburada_extract_sku($final_url, $html) ?: hepsiburada_extract_sku($requested_url, $html);
+
+    return [
+        'sku' => $sku,
+        'title' => $title,
+        'price' => null,
+        'image_url' => '',
+        'image_urls' => [],
+        'rating' => '',
+        'review_count' => '',
+        'description' => '',
+        'affiliate_url' => $requested_url,
+        'final_url' => $final_url,
+        'partial' => true,
+    ];
 }
 
 function hepsiburada_meta(DOMXPath $xp, string $name): string {
@@ -329,8 +358,8 @@ function hepsiburada_html_images(DOMXPath $xp, string $html, string $base): arra
 }
 
 function hepsiburada_parse_product(string $html, string $requested_url, string $final_url): array {
-    if ($html === '' || hepsiburada_is_blocked_html($html)) {
-        throw new RuntimeException('Hepsiburada ürün sayfası erişim koruması döndürdü. Link yönlendirmesi okunabiliyor ancak ürün adı/fiyat/görsel için sayfa HTML’i alınamadı.');
+    if ($html === '' || hepsiburada_is_blocked_html($html) || hepsiburada_is_redirect_html($html)) {
+        return hepsiburada_fallback_product($requested_url, $final_url, $html);
     }
 
     libxml_use_internal_errors(true);
@@ -386,8 +415,8 @@ function hepsiburada_parse_product(string $html, string $requested_url, string $
     $description = mb_substr(trim(preg_replace('/\s+/', ' ', $description)), 0, 280, 'UTF-8');
 
     $sku = hepsiburada_extract_sku($final_url, $html) ?: hepsiburada_extract_sku($requested_url, $html);
-    if ($title === '' || $image === '') {
-        throw new RuntimeException('Ürün adı veya görseli okunamadı. Hepsiburada sayfası bot koruması, geçersiz link veya desteklenmeyen sayfa yapısı döndürmüş olabilir.');
+    if ($title === '') {
+        return hepsiburada_fallback_product($requested_url, $final_url, $html);
     }
 
     return [
@@ -467,21 +496,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
         try {
             $fetch = hepsiburada_fetch($affiliate_url);
             $product_url = $fetch['product_url'] ?? $fetch['final_url'];
-            if ($fetch['html'] === '' || hepsiburada_is_blocked_html($fetch['html'])) {
-                $sku = hepsiburada_extract_sku($product_url) ?: hepsiburada_extract_sku($affiliate_url);
-                $details = $sku !== '' ? ' SKU: ' . $sku . '.' : '';
-                throw new RuntimeException('Hepsiburada ürün sayfası alınamadı. HTTP: ' . $fetch['code'] . '.' . $details . ' Kaynak erişim koruması döndürdüğü için ürün görseli/fiyatı güvenli okunamadı.');
-            }
-
             $product = hepsiburada_parse_product($fetch['html'], $affiliate_url, $product_url);
             $source_uid = hepsiburada_source_uid($product);
 
             $stored_images = [];
-            foreach (array_slice($product['image_urls'] ?: [$product['image_url']], 0, 5) as $image_url) {
+            $download_candidates = array_values(array_filter($product['image_urls'] ?: [$product['image_url']]));
+            foreach (array_slice($download_candidates, 0, 5) as $image_url) {
                 $stored_images[] = hepsiburada_download_image($image_url, $product['sku'] ?: md5($image_url)) ?: $image_url;
             }
             $stored_images = array_values(array_unique(array_filter($stored_images)));
-            $cover_image = $stored_images[0] ?? $product['image_url'];
+            $cover_image = $stored_images[0] ?? '';
 
             $pdo->beginTransaction();
 

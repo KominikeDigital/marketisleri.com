@@ -32,7 +32,7 @@ $recent_stmt->execute([$post['id']]);
 $recent_posts = $recent_stmt->fetchAll();
 
 // Fetch popular markets for sidebar
-$popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER BY name ASC LIMIT 6")->fetchAll();
+$popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER BY sort_order ASC, name ASC LIMIT 6")->fetchAll();
 
 // Formatting date helper
 function formatBlogDate($date_str) {

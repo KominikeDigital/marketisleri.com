@@ -10,6 +10,10 @@ $affiliate_images = $is_affiliate ? mi_affiliate_image_list($b) : [];
 if ($cover_src === '' && $affiliate_images) {
     $cover_src = $affiliate_images[0];
 }
+if ($cover_src === '' && $is_affiliate) {
+    $placeholder_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="640" viewBox="0 0 480 640"><rect width="480" height="640" fill="#f8fafc"/><rect x="70" y="120" width="340" height="400" rx="28" fill="#fff" stroke="#e2e8f0" stroke-width="4"/><circle cx="240" cy="280" r="74" fill="#f59e0b"/><path d="M200 278h80M240 238v80" stroke="#0f172a" stroke-width="24" stroke-linecap="round"/><text x="240" y="430" text-anchor="middle" font-family="Arial,sans-serif" font-size="34" font-weight="700" fill="#0f172a">Firsat</text></svg>';
+    $cover_src = 'data:image/svg+xml;utf8,' . rawurlencode($placeholder_svg);
+}
 $card_classes = 'bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 group flex flex-col relative';
 ?>
 

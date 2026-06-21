@@ -45,6 +45,11 @@ $conditions[] = "b.show_on_homepage = 1 AND (
     (b.cover_image IS NOT NULL AND b.cover_image != '')
     OR (b.pdf_path IS NOT NULL AND b.pdf_path != '')
     OR (SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = b.id) > 0
+    OR EXISTS (
+        SELECT 1 FROM brochure_products bp_visible
+        WHERE bp_visible.brochure_id = b.id
+          AND COALESCE(bp_visible.product_url, '') <> ''
+    )
 )";
 $conditions[] = "(COALESCE(b.source_name, '') NOT IN ('amazon', 'hepsiburada')
     OR COALESCE(b.source_url, '') <> ''
@@ -97,7 +102,7 @@ $sql = "SELECT b.*, m.name as market_name, m.logo as market_logo, m.slug as mark
                ap.review_count AS affiliate_review_count,
                ap.description AS affiliate_product_description,
                CASE WHEN EXISTS (SELECT 1 FROM brochure_products bp WHERE bp.brochure_id = b.id) THEN 1 ELSE 0 END as has_ai_analysis
-        FROM brochures b 
+        FROM brochures b
         JOIN markets m ON b.market_id = m.id
         LEFT JOIN brochure_products ap ON ap.id = (
             SELECT bp_first.id
@@ -111,19 +116,42 @@ if (!empty($conditions)) {
     $sql .= " WHERE " . implode(" AND ", $conditions);
 }
 
-$sql .= " ORDER BY b.start_date DESC, b.created_at DESC";
+// Brochure Pagination setup
+$limit = 10;
+$page = isset($_GET['page']) && $_GET['page'] > 0 ? intval($_GET['page']) : 1;
+$offset = ($page - 1) * $limit;
+
+// Count total brochures matching filters
+$count_sql = "SELECT COUNT(*) FROM brochures b JOIN markets m ON b.market_id = m.id";
+if (!empty($conditions)) {
+    $count_sql .= " WHERE " . implode(" AND ", $conditions);
+}
+$count_stmt = $pdo->prepare($count_sql);
+$count_stmt->execute($params);
+$total_brochures = intval($count_stmt->fetchColumn());
+$total_pages = ceil($total_brochures / $limit);
+
+// Fetch paginated list
+$sql .= " ORDER BY b.start_date DESC, b.created_at DESC LIMIT $limit OFFSET $offset";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $brochures = $stmt->fetchAll();
 
+// Pagination URL helper preserving other query parameters
+function get_pagination_url($page_num) {
+    $params = $_GET;
+    $params['page'] = $page_num;
+    return 'index.php?' . http_build_query($params) . '#listing-section';
+}
+
 // Fetch Categories & Markets for filters
 $categories = $pdo->query("SELECT * FROM categories ORDER BY id ASC")->fetchAll();
 $markets = $pdo->query("SELECT * FROM markets ORDER BY name ASC")->fetchAll();
-$popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER BY name ASC")->fetchAll();
+$popular_markets = $pdo->query("SELECT * FROM markets WHERE is_popular = 1 ORDER BY sort_order ASC, name ASC")->fetchAll();
 
-// Fetch 3 latest blog posts for homepage showcase
-$recent_blogs = $pdo->query("SELECT title, slug, summary, cover_image, created_at FROM blog_posts ORDER BY created_at DESC LIMIT 3")->fetchAll();
+// Fetch 15 latest blog posts for homepage slider
+$recent_blogs = $pdo->query("SELECT title, slug, summary, cover_image, created_at FROM blog_posts ORDER BY created_at DESC LIMIT 15")->fetchAll();
 
 // Formatting date helper
 if (!function_exists('formatBlogDate')) {
@@ -154,7 +182,7 @@ if (!function_exists('formatBlogDate')) {
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
+
     <!-- SEO Meta Tags -->
     <?php
     $seo_title = $site_settings['seo_title_home'] ?? 'marketisleri.com - Tüm Market Broşürleri Tek Yerde';
@@ -193,10 +221,10 @@ if (!function_exists('formatBlogDate')) {
     <title><?= htmlspecialchars($seo_title) ?></title>
     <meta name="description" content="<?= htmlspecialchars($seo_desc) ?>">
     <meta name="keywords" content="<?= htmlspecialchars($seo_key) ?>">
-    
+
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="<?= htmlspecialchars($site_url) ?>/uploads/logo.png">
-    
+
     <!-- Typography & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -204,24 +232,35 @@ if (!function_exists('formatBlogDate')) {
     <noscript>
         <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
     </noscript>
-    
+
+    <!-- Swiper CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
+
     <!-- Inlined Tailwind CSS to prevent render-blocking request -->
     <style>
-        <?php 
+        <?php
         $css_file = __DIR__ . '/uploads/tailwind.min.css';
         if (file_exists($css_file)) {
             echo file_get_contents($css_file);
         }
         ?>
     </style>
-    
+
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
         .font-title { font-family: 'Plus Jakarta Sans', sans-serif; }
-        
+
         /* Hide scrollbars for sliders */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Swiper overrides */
+        .blogSwiper .swiper-pagination-bullet-active {
+            background-color: #dc2626 !important;
+        }
+        .blogSwiper .swiper-slide {
+            height: auto;
+        }
 
         /* Sticky Header Transitions */
         header.sticky-header {
@@ -275,7 +314,7 @@ if (!function_exists('formatBlogDate')) {
             animation: float-orb-2 20s ease-in-out infinite;
         }
     </style>
-    
+
     <!-- Google AdSense -->
     <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
@@ -297,7 +336,7 @@ if (!function_exists('formatBlogDate')) {
                     </span>
                 <?php endif; ?>
             </a>
-            
+
             <nav class="flex items-center gap-6 text-sm font-bold text-slate-600">
                 <a href="index.php" class="text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">home</span>Anasayfa</a>
                 <a href="marketler.php" class="hover:text-red-600 transition flex items-center gap-1"><span class="material-symbols-outlined text-lg">storefront</span>Marketler</a>
@@ -309,7 +348,7 @@ if (!function_exists('formatBlogDate')) {
 
     <!-- Main Content Area -->
     <main class="pt-8 max-w-7xl w-full mx-auto px-4 md:px-6 flex-1 pb-16 space-y-10">
-        
+
         <!-- Hero Search Section -->
         <section id="hero-section" class="text-center py-16 bg-gradient-to-tr from-slate-950 via-red-950 to-slate-950 rounded-3xl border border-slate-800 relative overflow-hidden px-4 shadow-xl shadow-red-950/10">
             <!-- Video Background (dynamically loaded on desktop after page load to save initial bandwidth) -->
@@ -330,10 +369,10 @@ if (!function_exists('formatBlogDate')) {
             <!-- Glowing backdrops (Drifting Ambient) -->
             <div class="absolute top-[-40%] left-[-10%] w-[50%] h-[90%] rounded-full bg-red-500/10 blur-[100px] pointer-events-none animate-orb-1"></div>
             <div class="absolute bottom-[-40%] right-[-10%] w-[50%] h-[90%] rounded-full bg-rose-500/10 blur-[100px] pointer-events-none animate-orb-2"></div>
-            
+
             <!-- Mouse Follow Interactive Glow -->
             <div id="hero-mouse-glow" class="absolute w-[350px] h-[350px] rounded-full bg-red-500/[0.05] blur-[90px] pointer-events-none transition-transform duration-300 ease-out hidden md:block" style="left: -999px; top: -999px; transform: translate3d(0,0,0);"></div>
-            
+
             <span class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 uppercase tracking-widest mb-6 font-title">
                 <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
                 Kampanyalar & İndirimler
@@ -342,11 +381,11 @@ if (!function_exists('formatBlogDate')) {
             <h1 class="font-title text-4xl md:text-6xl font-black text-white mb-4 tracking-tight max-w-3xl mx-auto leading-tight">
                 Tüm Market Broşürleri <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-rose-400">Tek Yerde</span>
             </h1>
-            
+
             <p class="text-slate-400 md:text-lg mb-10 max-w-xl mx-auto font-medium">
                 BİM, A101, ŞOK ve daha fazlasının güncel aktüel katalogları ve indirimleri.
             </p>
-            
+
             <form method="GET" action="index.php" class="max-w-2xl mx-auto relative group mb-6">
                 <!-- Keep existing filters on search -->
                 <?php if ($selected_cat): ?>
@@ -356,17 +395,17 @@ if (!function_exists('formatBlogDate')) {
                     <input type="hidden" name="market" value="<?= $selected_market ?>">
                 <?php endif; ?>
                 <input type="hidden" name="tab" value="<?= htmlspecialchars($selected_tab) ?>">
-                
-                <input type="text" name="q" value="<?= htmlspecialchars($search_query) ?>" 
-                       class="w-full p-5 pl-14 pr-24 rounded-2xl border border-slate-800 shadow-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 outline-none text-slate-100 bg-slate-900/60 backdrop-blur-md transition-all text-base placeholder:text-slate-500" 
+
+                <input type="text" name="q" value="<?= htmlspecialchars($search_query) ?>"
+                       class="w-full p-5 pl-14 pr-24 rounded-2xl border border-slate-800 shadow-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 outline-none text-slate-100 bg-slate-900/60 backdrop-blur-md transition-all text-base placeholder:text-slate-500"
                        placeholder="Hangi marketin broşürünü arıyorsunuz? (BİM, A101, ŞOK...)">
                 <span class="absolute left-5 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-500 group-focus-within:text-red-500 transition-colors">search</span>
-                
+
                 <button type="submit" class="absolute right-2.5 top-1/2 -translate-y-1/2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold px-6 py-3 rounded-xl transition shadow-lg shadow-red-600/20 text-sm">
                     Ara
                 </button>
             </form>
-            
+
             <!-- Quick Searches / Popüler Aramalar -->
             <div class="flex flex-wrap items-center justify-center gap-2.5 max-w-xl mx-auto text-xs">
                 <span class="text-slate-500 font-semibold">Popüler:</span>
@@ -386,14 +425,14 @@ if (!function_exists('formatBlogDate')) {
             </h2>
             <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2 mask-linear">
                 <!-- All categories link -->
-                <a href="index.php?tab=<?= $selected_tab ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                <a href="index.php?tab=<?= $selected_tab ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>"
                    class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold border transition shrink-0 <?= $selected_cat === null ? 'bg-red-600 border-red-600 text-white shadow-md shadow-red-600/10' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300' ?>">
                     <span class="material-symbols-outlined text-lg">grid_view</span>
                     Tümü
                 </a>
-                
+
                 <?php foreach ($categories as $cat): ?>
-                    <a href="index.php?category=<?= $cat['id'] ?>&tab=<?= $selected_tab ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                    <a href="index.php?category=<?= $cat['id'] ?>&tab=<?= $selected_tab ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>"
                        class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold border transition shrink-0 <?= $selected_cat === $cat['id'] ? 'bg-red-600 border-red-600 text-white shadow-md shadow-red-600/10' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300' ?>">
                         <span class="material-symbols-outlined text-lg"><?= htmlspecialchars($cat['icon']) ?></span>
                         <?= htmlspecialchars($cat['name']) ?>
@@ -412,19 +451,19 @@ if (!function_exists('formatBlogDate')) {
                     Popüler Marketler
                 </h2>
                 <?php if ($selected_market !== null): ?>
-                    <a href="index.php?tab=<?= $selected_tab ?><?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>" 
+                    <a href="index.php?tab=<?= $selected_tab ?><?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>"
                        class="text-xs text-red-600 hover:text-red-500 font-bold">Market Filtresini Temizle</a>
                 <?php endif; ?>
             </div>
-            
+
             <div class="flex gap-4 overflow-x-auto no-scrollbar pb-3">
                 <?php foreach ($popular_markets as $m): ?>
-                    <a href="market.php?slug=<?= htmlspecialchars($m['slug']) ?>" 
+                    <a href="market.php?slug=<?= htmlspecialchars($m['slug']) ?>"
                        class="flex flex-col items-center gap-2 shrink-0 group">
                         <div class="w-16 h-16 rounded-full border border-slate-200 bg-white flex items-center justify-center p-1 shadow-sm transition-all group-hover:scale-110 group-hover:border-red-600/50">
                             <?php if ($m['logo']): ?>
-                                 <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>" 
-                                      class="w-full h-full object-contain rounded-full" 
+                                 <img src="uploads/markets/<?= htmlspecialchars($m['logo']) ?>"
+                                      class="w-full h-full object-contain rounded-full"
                                       alt=""
                                       width="64" height="64">
                             <?php else: ?>
@@ -445,22 +484,22 @@ if (!function_exists('formatBlogDate')) {
         <section id="listing-section" class="space-y-6">
             <!-- Tabs -->
             <div class="flex border-b border-slate-200 overflow-x-auto no-scrollbar">
-                <a href="index.php?tab=active<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section" 
+                <a href="index.php?tab=active<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section"
                    class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'active' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
                     <span class="material-symbols-outlined text-lg">local_fire_department</span>
                     Aktif Broşürler
                 </a>
-                <a href="index.php?tab=ending_soon<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section" 
+                <a href="index.php?tab=ending_soon<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section"
                    class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'ending_soon' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
                     <span class="material-symbols-outlined text-lg">hourglass_empty</span>
                     Son 1 Gün
                 </a>
-                <a href="index.php?tab=upcoming<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section" 
+                <a href="index.php?tab=upcoming<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section"
                    class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'upcoming' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
                     <span class="material-symbols-outlined text-lg">schedule</span>
                     Yakında Başlayacaklar
                 </a>
-                <a href="index.php?tab=expired<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section" 
+                <a href="index.php?tab=expired<?= $selected_cat ? "&category=" . $selected_cat : "" ?><?= $selected_market ? "&market=" . $selected_market : "" ?><?= $search_query ? "&q=" . urlencode($search_query) : "" ?>#listing-section"
                    class="px-6 py-4 text-sm font-bold border-b-2 transition-all shrink-0 flex items-center gap-2 <?= $selected_tab === 'expired' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800' ?>">
                     <span class="material-symbols-outlined text-lg">history</span>
                     Süresi Dolanlar
@@ -501,17 +540,65 @@ if (!function_exists('formatBlogDate')) {
                 </div>
             <?php else: ?>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-                    <?php 
+                    <?php
                     $bIndex = 0;
-                    foreach ($brochures as $b): 
+                    foreach ($brochures as $b):
                         $lazyLoading = ($bIndex < 4) ? 'fetchpriority="high" loading="eager"' : 'loading="lazy"';
                     ?>
                         <?php include __DIR__ . '/partials/brochure_card.php'; ?>
-                    <?php 
+                    <?php
                         $bIndex++;
-                    endforeach; 
+                    endforeach;
                     ?>
                 </div>
+
+                <!-- Brochure Pagination -->
+                <?php if ($total_pages > 1): ?>
+                    <nav class="flex items-center justify-center gap-2 pt-10" aria-label="Sayfalama">
+                        <!-- İlk Sayfa ve Geri -->
+                        <?php if ($page > 1): ?>
+                            <a href="<?= get_pagination_url(1) ?>"
+                               class="px-3 h-10 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center text-slate-600 hover:text-red-600 hover:border-red-500/50 transition shadow-sm text-xs font-bold gap-1"
+                               title="İlk Sayfa">
+                                <span class="material-symbols-outlined text-sm font-black">first_page</span>
+                                <span class="hidden sm:inline">İlk</span>
+                            </a>
+                            <a href="<?= get_pagination_url($page - 1) ?>"
+                               class="w-10 h-10 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center text-slate-600 hover:text-red-600 hover:border-red-500/50 transition shadow-sm"
+                               title="Önceki Sayfa">
+                                <span class="material-symbols-outlined text-lg font-black">chevron_left</span>
+                            </a>
+                        <?php endif; ?>
+
+                        <!-- Sayfa Numaraları -->
+                        <?php
+                        $start = max(1, $page - 2);
+                        $end = min($total_pages, $page + 2);
+                        for ($p_num = $start; $p_num <= $end; $p_num++):
+                        ?>
+                            <a href="<?= get_pagination_url($p_num) ?>"
+                               class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm transition shadow-sm <?= $p_num === $page ? 'bg-red-600 text-white' : 'bg-white text-slate-600 border border-slate-200/80 hover:text-red-600 hover:border-red-500/50' ?>">
+                                <?= $p_num ?>
+                            </a>
+                        <?php endfor; ?>
+
+                        <!-- İleri ve Son Sayfa -->
+                        <?php if ($page < $total_pages): ?>
+                            <a href="<?= get_pagination_url($page + 1) ?>"
+                               class="w-10 h-10 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center text-slate-600 hover:text-red-600 hover:border-red-500/50 transition shadow-sm"
+                               title="Sonraki Sayfa">
+                                <span class="material-symbols-outlined text-lg font-black">chevron_right</span>
+                            </a>
+                            <a href="<?= get_pagination_url($total_pages) ?>"
+                               class="px-3 h-10 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center text-slate-600 hover:text-red-600 hover:border-red-500/50 transition shadow-sm text-xs font-bold gap-1"
+                               title="Son Sayfa">
+                                <span class="hidden sm:inline">Son</span>
+                                <span class="material-symbols-outlined text-sm font-black">last_page</span>
+                            </a>
+                        <?php endif; ?>
+                    </nav>
+                <?php endif; ?>
+
             <?php endif; ?>
         </section>
 
@@ -528,40 +615,46 @@ if (!function_exists('formatBlogDate')) {
                     </a>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <?php foreach ($recent_blogs as $post): ?>
-                        <article class="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 flex flex-col group">
-                            <div class="h-44 overflow-hidden bg-slate-100 relative">
-                                <img src="<?= htmlspecialchars($site_url . '/' . ($post['cover_image'] ?: 'uploads/blog_cover_default.png')) ?>" 
-                                     alt="<?= htmlspecialchars($post['title']) ?>" 
-                                     class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
-                                <div class="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md shadow-sm">
-                                    Tasarruf
-                                </div>
+                <div class="swiper blogSwiper relative">
+                    <div class="swiper-wrapper">
+                        <?php foreach ($recent_blogs as $post): ?>
+                            <div class="swiper-slide h-auto">
+                                <article class="h-full bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 flex flex-col group">
+                                    <div class="h-44 overflow-hidden bg-slate-100 relative">
+                                        <img src="<?= htmlspecialchars($site_url . '/' . ($post['cover_image'] ?: 'uploads/blog_cover_default.png')) ?>"
+                                             alt="<?= htmlspecialchars($post['title']) ?>"
+                                             class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                                        <div class="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md shadow-sm">
+                                            Tasarruf
+                                        </div>
+                                    </div>
+                                    <div class="p-5 flex-1 flex flex-col space-y-3">
+                                        <div class="flex items-center gap-1.5 text-slate-400 text-xs font-medium">
+                                            <span class="material-symbols-outlined text-sm">calendar_month</span>
+                                            <span><?= formatBlogDate($post['created_at']) ?></span>
+                                        </div>
+                                        <h3 class="font-title text-base font-bold text-slate-900 group-hover:text-red-600 transition leading-snug">
+                                            <a href="blog-detay.php?slug=<?= htmlspecialchars($post['slug']) ?>">
+                                                <?= htmlspecialchars($post['title']) ?>
+                                            </a>
+                                        </h3>
+                                        <p class="text-slate-500 text-xs line-clamp-3 leading-relaxed flex-1">
+                                             <?= htmlspecialchars($post['summary']) ?>
+                                        </p>
+                                        <div class="pt-3 border-t border-slate-50 flex items-center justify-between">
+                                            <a href="blog-detay.php?slug=<?= htmlspecialchars($post['slug']) ?>"
+                                               class="inline-flex items-center gap-1 text-xs font-bold text-slate-900 group-hover:text-red-600 transition-colors">
+                                                Devamını Oku
+                                                <span class="material-symbols-outlined text-sm font-black group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </article>
                             </div>
-                            <div class="p-5 flex-1 flex flex-col space-y-3">
-                                <div class="flex items-center gap-1.5 text-slate-400 text-xs font-medium">
-                                    <span class="material-symbols-outlined text-sm">calendar_month</span>
-                                    <span><?= formatBlogDate($post['created_at']) ?></span>
-                                </div>
-                                <h3 class="font-title text-base font-bold text-slate-900 group-hover:text-red-600 transition leading-snug">
-                                    <a href="blog-detay.php?slug=<?= htmlspecialchars($post['slug']) ?>">
-                                        <?= htmlspecialchars($post['title']) ?>
-                                    </a>
-                                </h3>
-                                <p class="text-slate-500 text-xs line-clamp-3 leading-relaxed flex-1">
-                                     <?= htmlspecialchars($post['summary']) ?>
-                                </p>
-                                <div class="pt-3 border-t border-slate-50 flex items-center justify-between">
-                                    <a href="blog-detay.php?slug=<?= htmlspecialchars($post['slug']) ?>" 
-                                       class="inline-flex items-center gap-1 text-xs font-bold text-slate-900 group-hover:text-red-600 transition-colors">
-                                        Devamını Oku 
-                                        <span class="material-symbols-outlined text-sm font-black group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                                    </a>
-                                </div>
-                            </div>
-                        </article>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </div>
+                    <!-- Pagination dots with standard padding to look clean -->
+                    <div class="swiper-pagination !static mt-8"></div>
                 </div>
             </section>
         <?php endif; ?>
@@ -569,21 +662,21 @@ if (!function_exists('formatBlogDate')) {
         <!-- E-Bülten / Newsletter Subscription Section -->
         <section class="py-12 bg-gradient-to-tr from-slate-900 via-slate-950 to-slate-900 rounded-3xl border border-slate-800 text-center relative overflow-hidden px-6 shadow-xl mt-12">
             <div class="absolute top-[-50%] left-[-20%] w-[60%] h-[120%] rounded-full bg-red-500/5 blur-[100px] pointer-events-none"></div>
-            
+
             <span class="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center material-symbols-outlined text-2xl mx-auto mb-4 border border-red-500/20">
                 mail
             </span>
-            
+
             <h2 class="font-title text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">İndirimlerden İlk Siz Haberdar Olun</h2>
             <p class="text-slate-400 text-sm md:text-base mb-8 max-w-lg mx-auto font-medium">
                 Yeni market broşürleri yüklendiğinde anında e-posta bildirimleri almak için bültenimize ücretsiz kayıt olun.
             </p>
-            
+
             <form id="newsletter-form" onsubmit="submitSubscription(event)" class="max-w-md mx-auto flex flex-col sm:flex-row gap-3 relative z-10">
                 <input type="email" id="subscriber-email" required
                        class="flex-1 bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-2xl px-5 py-3.5 outline-none text-sm placeholder:text-slate-500"
                        placeholder="E-posta adresinizi yazın...">
-                <button type="submit" 
+                <button type="submit"
                         class="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-lg shadow-red-600/15 text-sm shrink-0 flex items-center justify-center gap-1.5">
                     Abone Ol
                     <span class="material-symbols-outlined text-sm">send</span>
@@ -645,14 +738,46 @@ if (!function_exists('formatBlogDate')) {
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
-            
+
             <div class="text-slate-400 text-xs text-center md:text-right space-y-1">
                 <p>&copy; 2026 marketisleri.com All rights reserved.</p>
                 <p><a href="https://kominikee.com" target="_blank" rel="noopener" class="text-red-600 hover:text-red-500 font-semibold">Kominike "Creative" Digital Project</a></p>
             </div>
         </div>
     </footer>
+    <!-- Swiper JS -->
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script>
+        // Swiper Blog Carousel Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof Swiper !== 'undefined' && document.querySelector('.blogSwiper')) {
+                new Swiper('.blogSwiper', {
+                    slidesPerView: 1,
+                    spaceBetween: 24,
+                    loop: true,
+                    autoplay: {
+                        delay: 4000,
+                        disableOnInteraction: false,
+                        pauseOnMouseEnter: true
+                    },
+                    pagination: {
+                        el: '.blogSwiper .swiper-pagination',
+                        clickable: true,
+                    },
+                    breakpoints: {
+                        768: {
+                            slidesPerView: 2,
+                            spaceBetween: 24
+                        },
+                        1024: {
+                            slidesPerView: 3,
+                            spaceBetween: 32
+                        }
+                    }
+                });
+            }
+        });
+
         async function submitSubscription(e) {
             e.preventDefault();
             const emailInput = document.getElementById('subscriber-email');
@@ -696,7 +821,7 @@ if (!function_exists('formatBlogDate')) {
                 const rect = heroSection.getBoundingClientRect();
                 const x = e.clientX - rect.left - 175; // Subtract radius (350/2)
                 const y = e.clientY - rect.top - 175;  // Subtract radius (350/2)
-                
+
                 mouseGlow.style.transform = `translate3d(${x}px, ${y}px, 0)`;
                 if (mouseGlow.style.left === '-999px') {
                     mouseGlow.style.left = '0px';

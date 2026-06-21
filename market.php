@@ -33,7 +33,7 @@ $search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
 $conditions = [
     "b.market_id = ?",
     "b.show_on_homepage = 1",
-    "((b.cover_image IS NOT NULL AND b.cover_image != '') OR (b.pdf_path IS NOT NULL AND b.pdf_path != '') OR (SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = b.id) > 0)",
+    "((b.cover_image IS NOT NULL AND b.cover_image != '') OR (b.pdf_path IS NOT NULL AND b.pdf_path != '') OR (SELECT COUNT(*) FROM brochure_pages WHERE brochure_id = b.id) > 0 OR EXISTS (SELECT 1 FROM brochure_products bp_visible WHERE bp_visible.brochure_id = b.id AND COALESCE(bp_visible.product_url, '') <> ''))",
     "(COALESCE(b.source_name, '') NOT IN ('amazon', 'hepsiburada')
         OR COALESCE(b.source_url, '') <> ''
         OR EXISTS (
