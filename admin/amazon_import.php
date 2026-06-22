@@ -470,8 +470,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['import'])) {
             $product = amazon_parse_product($fetch['html'], $affiliate_url, $fetch['final_url']);
             $source_uid = amazon_source_uid($product);
             $stored_images = [];
-            $download_candidates = array_values(array_filter($product['image_urls'] ?: [$product['image_url']]));
-            foreach (array_slice($download_candidates, 0, 5) as $image_url) {
+            $best_image = $product['image_url'] ?: ($product['image_urls'][0] ?? '');
+            $download_candidates = array_values(array_filter([$best_image]));
+            foreach ($download_candidates as $image_url) {
                 $stored_images[] = amazon_download_image($image_url, $product['asin'] ?: md5($image_url)) ?: $image_url;
             }
             $stored_images = array_values(array_unique(array_filter($stored_images)));

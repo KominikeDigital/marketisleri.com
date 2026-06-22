@@ -6,6 +6,7 @@ $product_title = trim((string)($b['affiliate_product_name'] ?? $b['amazon_produc
 $product_price = mi_price_label($b['affiliate_product_price'] ?? $b['amazon_product_price'] ?? null);
 $product_rating = mi_rating_label($b['affiliate_product_rating'] ?? $b['amazon_product_rating'] ?? '');
 $review_count = trim((string)($b['affiliate_review_count'] ?? $b['amazon_review_count'] ?? ''));
+$affiliate_source_label = $is_affiliate ? mi_affiliate_source_label($b) : '';
 $affiliate_images = $is_affiliate ? mi_affiliate_image_list($b) : [];
 if ($cover_src === '' && $affiliate_images) {
     $cover_src = $affiliate_images[0];
@@ -71,6 +72,9 @@ $card_classes = 'bg-white rounded-3xl border border-slate-100 overflow-hidden sh
     <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
         <?php if ($is_affiliate): ?>
             <div class="space-y-2.5">
+                <span class="text-xs font-black text-amber-600 tracking-wider uppercase mb-1.5 block">
+                    <?= htmlspecialchars($affiliate_source_label) ?>
+                </span>
                 <h3 class="font-title text-base font-bold text-slate-900 line-clamp-2" title="<?= htmlspecialchars($product_title) ?>">
                     <?= htmlspecialchars($product_title) ?>
                 </h3>

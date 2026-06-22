@@ -332,7 +332,13 @@ if (!function_exists('mi_affiliate_image_list')) {
             $images[] = $cover;
         }
 
-        return array_values(array_unique(array_filter($images)));
+        $images = array_values(array_unique(array_filter($images)));
+        if (mi_is_amazon_brochure($brochure)) {
+            $cover = mi_brochure_cover_src($brochure['cover_image'] ?? '');
+            return $cover !== '' ? [$cover] : array_slice($images, 0, 1);
+        }
+
+        return $images;
     }
 }
 
