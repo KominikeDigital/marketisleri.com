@@ -65,6 +65,20 @@ $current_url = htmlspecialchars($site_url . '/blog-detay.php?slug=' . $post['slu
     <title><?= htmlspecialchars($post['title']) ?> | marketisleri.com</title>
     <meta name="description" content="<?= htmlspecialchars(mb_substr(strip_tags($post['summary']), 0, 160)) ?>">
     
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="<?= $current_url ?>">
+    <meta property="og:title" content="<?= htmlspecialchars($post['title']) ?> | marketisleri.com">
+    <meta property="og:description" content="<?= htmlspecialchars(mb_substr(strip_tags($post['summary']), 0, 160)) ?>">
+    <meta property="og:image" content="<?= htmlspecialchars($site_url . '/' . ($post['cover_image'] ?: 'uploads/blog_cover_default.png')) ?>">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="<?= $current_url ?>">
+    <meta property="twitter:title" content="<?= htmlspecialchars($post['title']) ?> | marketisleri.com">
+    <meta property="twitter:description" content="<?= htmlspecialchars(mb_substr(strip_tags($post['summary']), 0, 160)) ?>">
+    <meta property="twitter:image" content="<?= htmlspecialchars($site_url . '/' . ($post['cover_image'] ?: 'uploads/blog_cover_default.png')) ?>">
+
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="<?= htmlspecialchars($site_url) ?>/uploads/logo.png">
     
@@ -94,16 +108,25 @@ $current_url = htmlspecialchars($site_url . '/blog-detay.php?slug=' . $post['slu
         .blog-rich-content h2 {
             font-family: 'Plus Jakarta Sans', sans-serif;
             font-weight: 800;
-            font-size: 1.35rem;
+            font-size: 1.45rem;
             color: #0f172a;
-            margin-top: 1.75rem;
-            margin-bottom: 0.75rem;
+            margin-top: 2rem;
+            margin-bottom: 0.85rem;
             line-height: 1.25;
+        }
+        .blog-rich-content h3 {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: #1e293b;
+            margin-top: 1.5rem;
+            margin-bottom: 0.65rem;
+            line-height: 1.3;
         }
         .blog-rich-content p {
             color: #475569;
             font-size: 1rem;
-            line-height: 1.75;
+            line-height: 1.8;
             margin-bottom: 1.25rem;
         }
         .blog-rich-content ul {
@@ -112,7 +135,15 @@ $current_url = htmlspecialchars($site_url . '/blog-detay.php?slug=' . $post['slu
             margin-bottom: 1.25rem;
             color: #475569;
             font-size: 1rem;
-            line-height: 1.75;
+            line-height: 1.8;
+        }
+        .blog-rich-content ol {
+            list-style-type: decimal;
+            padding-left: 1.5rem;
+            margin-bottom: 1.25rem;
+            color: #475569;
+            font-size: 1rem;
+            line-height: 1.8;
         }
         .blog-rich-content li {
             margin-bottom: 0.5rem;
@@ -120,6 +151,47 @@ $current_url = htmlspecialchars($site_url . '/blog-detay.php?slug=' . $post['slu
         .blog-rich-content strong {
             font-weight: 700;
             color: #0f172a;
+        }
+        .blog-rich-content blockquote {
+            border-l-4 border-red-500;
+            padding-left: 1.25rem;
+            font-style: italic;
+            color: #64748b;
+            margin: 1.5rem 0;
+            background-color: #f8fafc;
+            padding-top: 0.75rem;
+            padding-bottom: 0.75rem;
+            border-radius: 0 0.75rem 0.75rem 0;
+        }
+        .blog-rich-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.75rem 0;
+            font-size: 0.9rem;
+            text-align: left;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+        .blog-rich-content th {
+            background-color: #f1f5f9;
+            color: #1e293b;
+            font-weight: 700;
+            padding: 0.75rem 1rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .blog-rich-content td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            color: #475569;
+        }
+        .blog-rich-content figcaption {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            text-align: center;
+            margin-top: 0.5rem;
+            margin-bottom: 1.25rem;
+            font-style: italic;
         }
         .blog-rich-content a {
             color: #dc2626;
@@ -204,6 +276,9 @@ $current_url = htmlspecialchars($site_url . '/blog-detay.php?slug=' . $post['slu
                         <img src="<?= htmlspecialchars($site_url . '/' . ($post['cover_image'] ?: 'uploads/blog_cover_default.png')) ?>" 
                              alt="<?= htmlspecialchars($post['title']) ?>" 
                              class="w-full h-full object-cover">
+                    </div>
+                    <div class="text-xs text-slate-400 italic text-center mt-2">
+                        Görsel: <?= htmlspecialchars($post['title']) ?> rehberi ve tasarruf analiz detayları.
                     </div>
 
                     <!-- Article Body Content -->
