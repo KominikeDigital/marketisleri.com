@@ -87,9 +87,7 @@ if (!$is_pdf) {
         <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <?php endif; ?>
 
-    <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983" crossorigin="anonymous"></script>
-    <?php endif; ?>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983" crossorigin="anonymous"></script>
 
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }
@@ -437,14 +435,6 @@ if (!$is_pdf) {
             </a>
         </div>
 
-        <!-- Top Banner Ad -->
-        <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-            <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider mb-6 relative overflow-hidden select-none">
-                <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-                <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
-                GOOGLE ADSENSE REKLAM ALANI (728x90 veya Esnek)
-            </div>
-        <?php endif; ?>
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
             
@@ -550,14 +540,7 @@ if (!$is_pdf) {
                     </div>
                 </div>
 
-                <!-- Bottom Banner Ad -->
-                <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-                    <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider relative overflow-hidden select-none">
-                        <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-                        <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
-                        GOOGLE ADSENSE REKLAM ALANI (728x90 veya Esnek)
-                    </div>
-                <?php endif; ?>
+
             </div>
 
             <!-- Right: Sidebar -->
@@ -674,14 +657,7 @@ if (!$is_pdf) {
                     </div>
                 </div>
 
-                <!-- Sidebar Ad -->
-                <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-                    <div class="bg-white border border-slate-200/60 rounded-3xl p-6 text-center text-xs font-bold text-slate-400 tracking-wider shadow-sm select-none relative overflow-hidden h-60 flex flex-col justify-center items-center">
-                        <div class="absolute inset-0 bg-gradient-to-b from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-                        <span class="material-symbols-outlined text-2xl mb-2 text-slate-400">ads_click</span>
-                        GOOGLE ADSENSE REKLAM ALANI<br>(300x250 veya Esnek)
-                    </div>
-                <?php endif; ?>
+
             </div>
         </div>
     </main>

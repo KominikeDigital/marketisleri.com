@@ -97,10 +97,8 @@ function formatBlogDate($date_str) {
     </style>
     
     <!-- Google AdSense -->
-    <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
-             crossorigin="anonymous"></script>
-    <?php endif; ?>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
+         crossorigin="anonymous"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
 
@@ -130,14 +128,6 @@ function formatBlogDate($date_str) {
     <!-- Main Content Area -->
     <main class="pt-8 max-w-7xl w-full mx-auto px-4 md:px-6 flex-1 pb-16 space-y-10">
         
-        <!-- Header Banner Ad -->
-        <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-            <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider mb-2 relative overflow-hidden select-none">
-                <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-                <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
-                GOOGLE ADSENSE REKLAM ALANI
-            </div>
-        <?php endif; ?>
 
         <!-- Hero Section -->
         <section class="text-center py-12 bg-gradient-to-tr from-slate-900 via-red-950 to-slate-900 rounded-3xl border border-slate-800 relative overflow-hidden px-4 shadow-xl">
@@ -274,14 +264,7 @@ function formatBlogDate($date_str) {
             <?php endif; ?>
         </section>
 
-        <!-- Bottom Banner Ad -->
-        <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-            <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider relative overflow-hidden select-none">
-                <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-                <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
-                GOOGLE ADSENSE REKLAM ALANI
-            </div>
-        <?php endif; ?>
+
     </main>
 
     <!-- Footer -->

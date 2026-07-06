@@ -141,10 +141,8 @@ $brochures = $stmt->fetchAll();
     </style>
     
     <!-- Google AdSense -->
-    <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
-             crossorigin="anonymous"></script>
-    <?php endif; ?>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
+         crossorigin="anonymous"></script>
 
     <style>
         body { font-family: 'Hanken Grotesk', sans-serif; }

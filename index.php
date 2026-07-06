@@ -316,10 +316,8 @@ if (!function_exists('formatBlogDate')) {
     </style>
 
     <!-- Google AdSense -->
-    <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
-             crossorigin="anonymous"></script>
-    <?php endif; ?>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
+         crossorigin="anonymous"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
 

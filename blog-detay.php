@@ -133,10 +133,8 @@ $current_url = htmlspecialchars($site_url . '/blog-detay.php?slug=' . $post['slu
     </style>
     
     <!-- Google AdSense -->
-    <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
-             crossorigin="anonymous"></script>
-    <?php endif; ?>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8595320911699983"
+         crossorigin="anonymous"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
 
@@ -166,14 +164,6 @@ $current_url = htmlspecialchars($site_url . '/blog-detay.php?slug=' . $post['slu
     <!-- Main Content Area -->
     <main class="pt-8 max-w-7xl w-full mx-auto px-4 md:px-6 flex-1 pb-16">
         
-        <!-- Header Banner Ad -->
-        <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-            <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider mb-6 relative overflow-hidden select-none">
-                <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-                <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
-                GOOGLE ADSENSE REKLAM ALANI
-            </div>
-        <?php endif; ?>
 
         <!-- Two Column Layout -->
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
@@ -304,25 +294,11 @@ $current_url = htmlspecialchars($site_url . '/blog-detay.php?slug=' . $post['slu
                     </div>
                 <?php endif; ?>
 
-                <!-- Sidebar Ad Banner -->
-                <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-                    <div class="bg-white border border-slate-200/60 rounded-3xl p-6 text-center text-xs font-bold text-slate-400 tracking-wider shadow-sm select-none relative overflow-hidden h-64 flex flex-col justify-center items-center">
-                        <div class="absolute inset-0 bg-gradient-to-b from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-                        <span class="material-symbols-outlined text-2xl mb-2 text-slate-400">ads_click</span>
-                        GOOGLE ADSENSE REKLAM ALANI
-                    </div>
-                <?php endif; ?>
+
             </div>
         </div>
 
-        <!-- Bottom Banner Ad -->
-        <?php if (($site_settings['adsense_active'] ?? '1') === '1'): ?>
-            <div class="ad-banner-container w-full bg-white border border-slate-200/60 rounded-2xl p-4 text-center text-xs font-bold text-slate-400 tracking-wider relative overflow-hidden select-none">
-                <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 to-rose-500/5 pointer-events-none"></div>
-                <span class="material-symbols-outlined text-sm inline-block align-middle mr-1 text-slate-400">ads_click</span>
-                GOOGLE ADSENSE REKLAM ALANI
-            </div>
-        <?php endif; ?>
+
     </main>
 
     <!-- Footer -->
