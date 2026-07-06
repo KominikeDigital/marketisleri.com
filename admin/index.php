@@ -111,6 +111,10 @@ $recent_brochures = $recent_stmt->fetchAll();
                 <span class="material-symbols-outlined text-lg">settings</span>
                 Ayarlar
             </a>
+            <a href="status.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">monitoring</span>
+                Sistem Durumu (Status)
+            </a>
         </nav>
         <div class="p-4 border-t border-slate-800">
             <a href="logout.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-all font-semibold">

@@ -51,6 +51,50 @@ $settings = [];
 foreach ($settings_raw as $s) {
     $settings[$s['key_name']] = $s['value_text'];
 }
+
+// Fetch status metrics for the settings status widget
+$time_24h = date('Y-m-d H:i:s', strtotime('-24 hours'));
+$time_7d = date('Y-m-d H:i:s', strtotime('-7 days'));
+$time_30d = date('Y-m-d H:i:s', strtotime('-30 days'));
+$today_date = date('Y-m-d');
+
+$widget_status = [
+    'db_status' => 'Aktif',
+    'active_brochures' => 0,
+    'brochures_24h' => 0,
+    'products_24h' => 0,
+    'subscribers_24h' => 0,
+    'brochures_7d' => 0,
+    'brochures_30d' => 0
+];
+
+try {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM brochures WHERE start_date <= ? AND end_date >= ?");
+    $stmt->execute([$today_date, $today_date]);
+    $widget_status['active_brochures'] = (int)$stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM brochures WHERE created_at >= ?");
+    $stmt->execute([$time_24h]);
+    $widget_status['brochures_24h'] = (int)$stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM brochures WHERE created_at >= ?");
+    $stmt->execute([$time_7d]);
+    $widget_status['brochures_7d'] = (int)$stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM brochures WHERE created_at >= ?");
+    $stmt->execute([$time_30d]);
+    $widget_status['brochures_30d'] = (int)$stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM brochure_products WHERE analyzed_at >= ?");
+    $stmt->execute([$time_24h]);
+    $widget_status['products_24h'] = (int)$stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM subscribers WHERE created_at >= ?");
+    $stmt->execute([$time_24h]);
+    $widget_status['subscribers_24h'] = (int)$stmt->fetchColumn();
+} catch (PDOException $e) {
+    $widget_status['db_status'] = 'Bağlantı Hatası';
+}
 ?>
 <!DOCTYPE html>
 <html lang="tr">
@@ -128,6 +172,10 @@ foreach ($settings_raw as $s) {
             <a href="settings.php" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold transition-all">
                 <span class="material-symbols-outlined text-lg">settings</span>
                 Ayarlar
+            </a>
+            <a href="status.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <span class="material-symbols-outlined text-lg">monitoring</span>
+                Sistem Durumu (Status)
             </a>
         </nav>
         <div class="p-4 border-t border-slate-800">
@@ -321,6 +369,43 @@ foreach ($settings_raw as $s) {
                             <option value="1" <?= ($settings['adsense_active'] ?? '1') === '1' ? 'selected' : '' ?>>Aktif (Reklamları Göster)</option>
                             <option value="0" <?= ($settings['adsense_active'] ?? '1') === '0' ? 'selected' : '' ?>>Pasif (Reklamları Gizle)</option>
                         </select>
+                    </div>
+                </div>
+
+                <!-- Sistem Durumu (Status) Card -->
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+                        <div class="flex items-center gap-3">
+                            <span class="material-symbols-outlined text-red-500">monitoring</span>
+                            <h3 class="font-title text-lg font-bold text-white">Sistem Durumu (Status)</h3>
+                        </div>
+                        <a href="status.php" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm">open_in_new</span> Detaylı Rapor
+                        </a>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1">
+                            <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Veritabanı</span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span class="text-xs font-bold text-white"><?= htmlspecialchars($widget_status['db_status']) ?></span>
+                            </div>
+                        </div>
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1">
+                            <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Aktif Broşürler</span>
+                            <span class="text-sm font-extrabold text-white block"><?= $widget_status['active_brochures'] ?> Aktif</span>
+                        </div>
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1">
+                            <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Son 24 Saat</span>
+                            <span class="text-[11px] text-slate-300 block">Broşür: <strong class="text-white"><?= $widget_status['brochures_24h'] ?></strong></span>
+                            <span class="text-[11px] text-slate-300 block">AI Ürün: <strong class="text-white"><?= $widget_status['products_24h'] ?></strong></span>
+                        </div>
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1">
+                            <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Geçmiş İzleme</span>
+                            <span class="text-[11px] text-slate-300 block">1 Hafta: <strong class="text-white"><?= $widget_status['brochures_7d'] ?></strong></span>
+                            <span class="text-[11px] text-slate-300 block">1 Ay: <strong class="text-white"><?= $widget_status['brochures_30d'] ?></strong></span>
+                        </div>
                     </div>
                 </div>
 
